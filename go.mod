@@ -1,4 +1,4 @@
-module github.com/conduitio/conduit-connector-connectorname
+module github.com/conduitio-labs/conduit-connector-dropbox
 
 go 1.23.2
 

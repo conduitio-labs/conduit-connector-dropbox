@@ -2,7 +2,7 @@ VERSION=$(shell git describe --tags --dirty --always)
 
 .PHONY: build
 build:
-	go build -ldflags "-X 'github.com/conduitio/conduit-connector-connectorname.version=${VERSION}'" -o conduit-connector-connectorname cmd/connector/main.go
+	go build -ldflags "-X 'github.com/conduitio-labs/conduit-connector-dropbox.version=${VERSION}'" -o conduit-connector-dropbox cmd/connector/main.go
 
 .PHONY: test
 test:
@@ -33,4 +33,4 @@ fmt:
 
 .PHONY: lint
 lint:
-	golangci-lint run
+	golangci-lint run -v
