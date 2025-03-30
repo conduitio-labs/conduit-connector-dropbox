@@ -3,11 +3,7 @@
 [Conduit](https://conduit.io) connector for <!-- readmegen:name -->Dropbox<!-- /readmegen:name -->.
 
 <!-- readmegen:description -->
-This is a detailed description of your connector.
-
-It can contain information about the features and limitations of the connector, usage instructions, etc.
-
-By default, it's inserted into the README file and Markdown syntax can be used.<!-- /readmegen:description -->
+Source and destination connector for Dropbox.<!-- /readmegen:description -->
 
 ## Source
 
@@ -26,15 +22,14 @@ pipelines:
       - id: example
         plugin: "dropbox"
         settings:
-          # GlobalConfigParam is named global_config_param_name and needs to be
-          # provided by the user.
-          # Type: string
-          # Required: yes
-          global_config_param_name: ""
           # SourceConfigParam must be provided by the user.
           # Type: string
           # Required: yes
           sourceConfigParam: ""
+          # Token is used to authenticate API access.
+          # Type: string
+          # Required: yes
+          token: ""
           # Maximum delay before an incomplete batch is read from the source.
           # Type: duration
           # Required: no
@@ -99,11 +94,10 @@ pipelines:
       - id: example
         plugin: "dropbox"
         settings:
-          # GlobalConfigParam is named global_config_param_name and needs to be
-          # provided by the user.
+          # Token is used to authenticate API access.
           # Type: string
           # Required: yes
-          global_config_param_name: ""
+          token: ""
           # DestinationConfigParam must be either yes or no (defaults to yes).
           # Type: string
           # Required: no

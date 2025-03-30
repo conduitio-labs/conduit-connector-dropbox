@@ -15,10 +15,8 @@
 package dropbox
 
 // Config contains shared config parameters, common to the source and
-// destination. If you don't need shared parameters you can entirely remove this
-// file.
+// destination.
 type Config struct {
-	// GlobalConfigParam is named global_config_param_name and needs to be
-	// provided by the user.
-	GlobalConfigParam string `json:"global_config_param_name" validate:"required"`
+	// Token is used to authenticate API access.
+	Token string `json:"token" validate:"required"`
 }
