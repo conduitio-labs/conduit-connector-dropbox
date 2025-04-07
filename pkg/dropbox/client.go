@@ -57,7 +57,7 @@ func (c *DropboxClient) ListFolder(ctx context.Context, path string, recursive b
 		Cursor  string  `json:"cursor"`
 	}
 
-	if err := c.makeRequest(ctx, "/files/list_folder", req, &resp); err != nil {
+	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder", nil, req, &resp); err != nil {
 		return nil, "", err
 	}
 
@@ -75,7 +75,7 @@ func (c *DropboxClient) ListFolderContinue(ctx context.Context, cursor string) (
 		HasMore bool     `json:"has_more"`
 	}
 
-	if err := c.makeRequest(ctx, "/files/list_folder/continue", req, &resp); err != nil {
+	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder/continue", nil, req, &resp); err != nil {
 		return nil, "", false, err
 	}
 
@@ -92,26 +92,30 @@ func (c *DropboxClient) ListFolderLongpoll(ctx context.Context, cursor string, t
 		Changes bool `json:"changes"`
 	}
 
-	if err := c.makeRequest(ctx, "/files/list_folder/longpoll", req, &resp); err != nil {
+	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder/longpoll", nil, req, &resp); err != nil {
 		return false, "", err
 	}
 
 	return resp.Changes, cursor, nil
 }
 
-func (c *DropboxClient) makeRequest(ctx context.Context, endpoint string, reqBody, respBody interface{}) error {
+func (c *DropboxClient) makeRequest(ctx context.Context, method, endpoint string, headers map[string]string, reqBody, respBody interface{}) error {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshal request failed: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL+endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, apiURL+endpoint, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request failed: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.accessToken)
 	req.Header.Set("Content-Type", "application/json")
+
+	for header, value := range headers {
+		req.Header.Set(header, value)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
