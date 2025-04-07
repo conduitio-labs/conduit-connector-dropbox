@@ -16,33 +16,43 @@ package dropbox
 
 import (
 	"context"
+	"fmt"
+	"sync"
+	"time"
 
+	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
+	"github.com/conduitio-labs/conduit-connector-dropbox/source"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+)
+
+var (
+	ErrSourceClosed = fmt.Errorf("error source not opened for reading")
+	ErrReadingData  = fmt.Errorf("error reading data")
 )
 
 type Source struct {
 	sdk.UnimplementedSource
 
-	config           SourceConfig
-	lastPositionRead opencdc.Position //nolint:unused // this is just an example
+	config   SourceConfig
+	position *source.Position
+	client   dropbox.Client
+	ch       chan opencdc.Record
+	wg       *sync.WaitGroup
+	cancel   context.CancelFunc
 }
 
 type SourceConfig struct {
 	sdk.DefaultSourceMiddleware
-	// Config includes parameters that are the same in the source and destination.
 	Config
-	// SourceConfigParam must be provided by the user.
-	SourceConfigParam string `json:"sourceConfigParam" validate:"required"`
-}
 
-func (s *SourceConfig) Validate(context.Context) error {
-	// Custom validation or parsing should be implemented here.
-	return nil
+	Path            string        `json:"path" default:"/"`
+	PollingPeriod   time.Duration `json:"pollingPeriod" default:"10s"`
+	LongpollTimeout int           `json:"longpollTimeout" default:"30"`
+	MaxRetries      int           `json:"maxRetries" default:"5"`
 }
 
 func NewSource() sdk.Source {
-	// Create Source and wrap it in the default middleware.
 	return sdk.SourceWithMiddleware(&Source{})
 }
 
@@ -50,39 +60,71 @@ func (s *Source) Config() sdk.SourceConfig {
 	return &s.config
 }
 
-func (s *Source) Open(_ context.Context, _ opencdc.Position) error {
-	// Open is called after Configure to signal the plugin it can prepare to
-	// start producing records. If needed, the plugin should open connections in
-	// this function. The position parameter will contain the position of the
-	// last record that was successfully processed, Source should therefore
-	// start producing records after this position. The context passed to Open
-	// will be cancelled once the plugin receives a stop signal from Conduit.
+func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
+	sdk.Logger(ctx).Info().Msg("Opening Dropbox source")
+
+	var err error
+	s.position, err = source.ParseSDKPosition(position)
+	if err != nil {
+		return err
+	}
+
+	s.client, err = dropbox.NewDropboxClient(s.config.Token)
+	if err != nil {
+		return fmt.Errorf("error creating dropbox client: %w", err)
+	}
+
+	s.ch = make(chan opencdc.Record, 1)
+	s.wg = &sync.WaitGroup{}
+
+	ctx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
+	s.wg.Add(1)
+	go source.NewWorker(s.client, s.config.Path, s.position, s.ch, s.config.LongpollTimeout, s.config.PollingPeriod, s.config.MaxRetries, s.wg).Start(ctx)
+
 	return nil
 }
 
-func (s *Source) ReadN(context.Context, int) ([]opencdc.Record, error) {
-	// ReadN is the same as Read, but returns a batch of records. The connector
-	// is expected to return at most n records. If there are fewer records
-	// available, it should return all of them. If there are no records available
-	// it should block until there are records available or the context is
-	// cancelled. If the context is cancelled while ReadN is running, it should
-	// return the context error.
-	return []opencdc.Record{}, nil
+func (s *Source) ReadN(ctx context.Context, n int) ([]opencdc.Record, error) {
+	if s.ch == nil {
+		return nil, ErrSourceClosed
+	}
+
+	records := make([]opencdc.Record, 0, n)
+	for len(records) < n {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case record, ok := <-s.ch:
+			if !ok {
+				if len(records) == 0 {
+					return nil, ErrReadingData
+				}
+				return records, nil
+			}
+			records = append(records, record)
+		}
+	}
+
+	return records, nil
 }
 
-func (s *Source) Ack(_ context.Context, _ opencdc.Position) error {
-	// Ack signals to the implementation that the record with the supplied
-	// position was successfully processed. This method might be called after
-	// the context of Read is already cancelled, since there might be
-	// outstanding acks that need to be delivered. When Teardown is called it is
-	// guaranteed there won't be any more calls to Ack.
-	// Ack can be called concurrently with Read.
+func (s *Source) Ack(ctx context.Context, position opencdc.Position) error {
+	sdk.Logger(ctx).Trace().Str("position", string(position)).Msg("got ack")
 	return nil
 }
 
-func (s *Source) Teardown(_ context.Context) error {
-	// Teardown signals to the plugin that there will be no more calls to any
-	// other function. After Teardown returns, the plugin should be ready for a
-	// graceful shutdown.
+func (s *Source) Teardown(ctx context.Context) error {
+	sdk.Logger(ctx).Info().Msg("Tearing down Dropbox source")
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if s.wg != nil {
+		s.wg.Wait()
+	}
+	if s.ch != nil {
+		close(s.ch)
+		s.ch = nil
+	}
 	return nil
 }
