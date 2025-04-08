@@ -22,14 +22,32 @@ pipelines:
       - id: example
         plugin: "dropbox"
         settings:
-          # SourceConfigParam must be provided by the user.
-          # Type: string
-          # Required: yes
-          sourceConfigParam: ""
           # Token is used to authenticate API access.
           # Type: string
           # Required: yes
           token: ""
+          # Maximum size of a file chunk in bytes to split large files, default
+          # is 3MB.
+          # Type: int
+          # Required: no
+          fileChunkSizeBytes: "3145728"
+          # Number of seconds to wait for changes during longpolling.
+          # Type: int
+          # Required: no
+          longpollTimeout: "30"
+          # Path of the Dropbox directory to read/write files. Empty path
+          # implies root directory.
+          # Type: string
+          # Required: no
+          path: ""
+          # Interval to poll for changes when longpolling fails.
+          # Type: duration
+          # Required: no
+          pollingPeriod: "10s"
+          # The maximum number of retries of failed operations.
+          # Type: int
+          # Required: no
+          retries: "0"
           # Maximum delay before an incomplete batch is read from the source.
           # Type: duration
           # Required: no
@@ -102,6 +120,11 @@ pipelines:
           # Type: string
           # Required: no
           destinationConfigParam: "yes"
+          # Path of the Dropbox directory to read/write files. Empty path
+          # implies root directory.
+          # Type: string
+          # Required: no
+          path: ""
           # Maximum delay before an incomplete batch is written to the
           # destination.
           # Type: duration

@@ -39,17 +39,20 @@ type Source struct {
 	client   dropbox.Client
 	ch       chan opencdc.Record
 	wg       *sync.WaitGroup
-	cancel   context.CancelFunc
 }
 
 type SourceConfig struct {
 	sdk.DefaultSourceMiddleware
 	Config
 
-	Path            string        `json:"path" default:"/"`
-	PollingPeriod   time.Duration `json:"pollingPeriod" default:"10s"`
-	LongpollTimeout int           `json:"longpollTimeout" default:"30"`
-	MaxRetries      int           `json:"maxRetries" default:"5"`
+	// Interval to poll for changes when longpolling fails.
+	PollingPeriod time.Duration `json:"pollingPeriod" default:"10s"`
+	// Number of seconds to wait for changes during longpolling.
+	LongpollTimeout int `json:"longpollTimeout" default:"30"`
+	// Maximum size of a file chunk in bytes to split large files, default is 3MB.
+	FileChunkSizeBytes uint64 `json:"fileChunkSizeBytes" default:"3145728"`
+	// The maximum number of retries of failed operations.
+	Retries int `json:"retries" default:"0"`
 }
 
 func NewSource() sdk.Source {
@@ -77,10 +80,22 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 	s.ch = make(chan opencdc.Record, 1)
 	s.wg = &sync.WaitGroup{}
 
-	ctx, cancel := context.WithCancel(ctx)
-	s.cancel = cancel
+	// Start worker
 	s.wg.Add(1)
-	go source.NewWorker(s.client, s.config.Path, s.position, s.ch, s.config.LongpollTimeout, s.config.PollingPeriod, s.config.MaxRetries, s.wg).Start(ctx)
+	go func() {
+		source.NewWorker(
+			ctx,
+			s.client,
+			s.config.Path,
+			s.config.LongpollTimeout,
+			s.config.FileChunkSizeBytes,
+			s.position,
+			s.ch,
+			s.config.Retries,
+			s.config.PollingPeriod,
+			s.wg,
+		).Start()
+	}()
 
 	return nil
 }
@@ -96,6 +111,9 @@ func (s *Source) ReadN(ctx context.Context, n int) ([]opencdc.Record, error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case record, ok := <-s.ch:
+			if ok {
+				fmt.Println("got record --------- ", record.Metadata)
+			}
 			if !ok {
 				if len(records) == 0 {
 					return nil, ErrReadingData
@@ -116,9 +134,6 @@ func (s *Source) Ack(ctx context.Context, position opencdc.Position) error {
 
 func (s *Source) Teardown(ctx context.Context) error {
 	sdk.Logger(ctx).Info().Msg("Tearing down Dropbox source")
-	if s.cancel != nil {
-		s.cancel()
-	}
 	if s.wg != nil {
 		s.wg.Wait()
 	}

@@ -7,13 +7,6 @@ specification:
   author: Your Name
   source:
     parameters:
-      - name: sourceConfigParam
-        description: SourceConfigParam must be provided by the user.
-        type: string
-        default: ""
-        validations:
-          - type: required
-            value: ""
       - name: token
         description: Token is used to authenticate API access.
         type: string
@@ -21,6 +14,31 @@ specification:
         validations:
           - type: required
             value: ""
+      - name: fileChunkSizeBytes
+        description: Maximum size of a file chunk in bytes to split large files, default is 3MB.
+        type: int
+        default: "3145728"
+        validations: []
+      - name: longpollTimeout
+        description: Number of seconds to wait for changes during longpolling.
+        type: int
+        default: "30"
+        validations: []
+      - name: path
+        description: Path of the Dropbox directory to read/write files. Empty path implies root directory.
+        type: string
+        default: ""
+        validations: []
+      - name: pollingPeriod
+        description: Interval to poll for changes when longpolling fails.
+        type: duration
+        default: 10s
+        validations: []
+      - name: retries
+        description: The maximum number of retries of failed operations.
+        type: int
+        default: "0"
+        validations: []
       - name: sdk.batch.delay
         description: Maximum delay before an incomplete batch is read from the source.
         type: duration
@@ -97,6 +115,11 @@ specification:
         validations:
           - type: inclusion
             value: yes,no
+      - name: path
+        description: Path of the Dropbox directory to read/write files. Empty path implies root directory.
+        type: string
+        default: ""
+        validations: []
       - name: sdk.batch.delay
         description: Maximum delay before an incomplete batch is written to the destination.
         type: duration

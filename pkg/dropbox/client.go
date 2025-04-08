@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -27,6 +28,7 @@ var ErrEmptyAccessToken = fmt.Errorf("access token is required")
 
 const (
 	apiURL         = "https://api.dropboxapi.com/2"
+	contentURL     = "https://content.dropboxapi.com/2"
 	defaultTimeout = 30 * time.Second
 )
 
@@ -57,7 +59,7 @@ func (c *DropboxClient) ListFolder(ctx context.Context, path string, recursive b
 		Cursor  string  `json:"cursor"`
 	}
 
-	if err := c.makeRequest(ctx, "/files/list_folder", req, &resp); err != nil {
+	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder", nil, req, &resp); err != nil {
 		return nil, "", err
 	}
 
@@ -75,7 +77,7 @@ func (c *DropboxClient) ListFolderContinue(ctx context.Context, cursor string) (
 		HasMore bool     `json:"has_more"`
 	}
 
-	if err := c.makeRequest(ctx, "/files/list_folder/continue", req, &resp); err != nil {
+	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder/continue", nil, req, &resp); err != nil {
 		return nil, "", false, err
 	}
 
@@ -92,26 +94,73 @@ func (c *DropboxClient) ListFolderLongpoll(ctx context.Context, cursor string, t
 		Changes bool `json:"changes"`
 	}
 
-	if err := c.makeRequest(ctx, "/files/list_folder/longpoll", req, &resp); err != nil {
+	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder/longpoll", nil, req, &resp); err != nil {
 		return false, "", err
 	}
 
 	return resp.Changes, cursor, nil
 }
 
-func (c *DropboxClient) makeRequest(ctx context.Context, endpoint string, reqBody, respBody interface{}) error {
+func (c *DropboxClient) DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error) {
+	reqBody := struct {
+		Path string `json:"path"`
+	}{
+		Path: path,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request failed: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		contentURL+"/files/download",
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create request failed: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Dropbox-API-Arg", string(bodyBytes))
+
+	// Set Range header.
+	if length > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, start+length-1))
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		resp.Body.Close()
+		return nil, parseError(resp)
+	}
+
+	return resp.Body, nil
+}
+
+func (c *DropboxClient) makeRequest(ctx context.Context, method, endpoint string, headers map[string]string, reqBody, respBody interface{}) error {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshal request failed: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL+endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, apiURL+endpoint, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request failed: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.accessToken)
 	req.Header.Set("Content-Type", "application/json")
+
+	for header, value := range headers {
+		req.Header.Set(header, value)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

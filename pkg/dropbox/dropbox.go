@@ -14,10 +14,14 @@
 
 package dropbox
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type Client interface {
 	ListFolder(ctx context.Context, path string, recursive bool) ([]Entry, string, error)
 	ListFolderContinue(ctx context.Context, cursor string) ([]Change, string, bool, error)
 	ListFolderLongpoll(ctx context.Context, cursor string, timeoutSec int) (bool, string, error)
+	DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error)
 }
