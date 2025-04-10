@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/conduitio/conduit-commons/opencdc"
 )
@@ -31,10 +30,9 @@ type ChunkInfo struct {
 }
 
 type Position struct {
-	mu          sync.Mutex
-	Cursor      string     `json:"cursor"`
-	ChunkInfo   *ChunkInfo `json:"chunk_info,omitempty"`
-	LastUpdated time.Time  `json:"last_updated"`
+	mu        sync.Mutex
+	Cursor    string     `json:"cursor"`
+	ChunkInfo *ChunkInfo `json:"chunk_info"`
 }
 
 func NewPosition() *Position {
@@ -64,27 +62,30 @@ func (p *Position) marshal() (opencdc.Position, error) {
 	return positionBytes, nil
 }
 
-func (p *Position) updateFile(fileID, filePath string) {
+func (p *Position) updateChunkInfo(chunk *ChunkInfo) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.ChunkInfo = nil
-	p.LastUpdated = time.Now()
+	p.ChunkInfo = chunk
 }
 
-func (p *Position) updateChunk(fileID, filePath string, chunkIdx, totalChunks int) {
+func (p *Position) updateCursor(cursor string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.ChunkInfo == nil || p.ChunkInfo.FileID != fileID {
-		p.ChunkInfo = &ChunkInfo{
-			FileID:      fileID,
-			FilePath:    filePath,
-			ChunkIndex:  chunkIdx,
-			TotalChunks: totalChunks,
-		}
-	} else {
-		p.ChunkInfo.ChunkIndex = chunkIdx
-	}
-	p.LastUpdated = time.Now()
+	p.Cursor = cursor
+}
+
+func (p *Position) getCursor() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.Cursor
+}
+
+func (p *Position) getChunkInfo() *ChunkInfo {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.ChunkInfo
 }

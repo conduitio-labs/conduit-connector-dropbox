@@ -72,7 +72,7 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 		return err
 	}
 
-	s.client, err = dropbox.NewDropboxClient(s.config.Token)
+	s.client, err = dropbox.NewDropboxClient(s.config.Token, s.config.LongpollTimeout)
 	if err != nil {
 		return fmt.Errorf("error creating dropbox client: %w", err)
 	}
