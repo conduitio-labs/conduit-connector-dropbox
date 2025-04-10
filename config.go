@@ -19,4 +19,6 @@ package dropbox
 type Config struct {
 	// Token is used to authenticate API access.
 	Token string `json:"token" validate:"required"`
+	// Path of the Dropbox directory to read/write files. Empty path implies root directory.
+	Path string `json:"path"`
 }

@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -27,6 +28,7 @@ var ErrEmptyAccessToken = fmt.Errorf("access token is required")
 
 const (
 	apiURL         = "https://api.dropboxapi.com/2"
+	contentURL     = "https://content.dropboxapi.com/2"
 	defaultTimeout = 30 * time.Second
 )
 
@@ -97,6 +99,49 @@ func (c *DropboxClient) ListFolderLongpoll(ctx context.Context, cursor string, t
 	}
 
 	return resp.Changes, cursor, nil
+}
+
+func (c *DropboxClient) DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error) {
+	reqBody := struct {
+		Path string `json:"path"`
+	}{
+		Path: path,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request failed: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		contentURL+"/files/download",
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create request failed: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Dropbox-API-Arg", string(bodyBytes))
+
+	// Set Range header.
+	if length > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, start+length-1))
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		resp.Body.Close()
+		return nil, parseError(resp)
+	}
+
+	return resp.Body, nil
 }
 
 func (c *DropboxClient) makeRequest(ctx context.Context, method, endpoint string, headers map[string]string, reqBody, respBody interface{}) error {

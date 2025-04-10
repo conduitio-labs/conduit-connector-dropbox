@@ -18,23 +18,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/conduitio/conduit-commons/opencdc"
 )
 
+type ChunkInfo struct {
+	FileID      string `json:"file_id"`
+	FilePath    string `json:"file_path"`
+	ChunkIndex  int    `json:"chunk_index"`
+	TotalChunks int    `json:"total_chunks"`
+}
+
 type Position struct {
-	mu     sync.Mutex
-	Cursor string `json:"cursor"`
+	mu          sync.Mutex
+	Cursor      string     `json:"cursor"`
+	ChunkInfo   *ChunkInfo `json:"chunk_info,omitempty"`
+	LastUpdated time.Time  `json:"last_updated"`
 }
 
 func NewPosition() *Position {
 	return &Position{}
 }
 
-// ParseSDKPosition parses opencdc.Position and returns Position.
 func ParseSDKPosition(position opencdc.Position) (*Position, error) {
 	var pos Position
-
 	if position == nil {
 		return NewPosition(), nil
 	}
@@ -42,14 +50,13 @@ func ParseSDKPosition(position opencdc.Position) (*Position, error) {
 	if err := json.Unmarshal(position, &pos); err != nil {
 		return nil, fmt.Errorf("unmarshal opencdc.Position into Position: %w", err)
 	}
-
 	return &pos, nil
 }
 
-// marshal marshals Position and returns opencdc.Position or an error.
 func (p *Position) marshal() (opencdc.Position, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	positionBytes, err := json.Marshal(p)
 	if err != nil {
 		return nil, fmt.Errorf("marshal position: %w", err)
@@ -57,9 +64,27 @@ func (p *Position) marshal() (opencdc.Position, error) {
 	return positionBytes, nil
 }
 
-// update updates a cursor in the source position.
-func (p *Position) updateCursor(cursor string) {
+func (p *Position) updateFile(fileID, filePath string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.Cursor = cursor
+
+	p.ChunkInfo = nil
+	p.LastUpdated = time.Now()
+}
+
+func (p *Position) updateChunk(fileID, filePath string, chunkIdx, totalChunks int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.ChunkInfo == nil || p.ChunkInfo.FileID != fileID {
+		p.ChunkInfo = &ChunkInfo{
+			FileID:      fileID,
+			FilePath:    filePath,
+			ChunkIndex:  chunkIdx,
+			TotalChunks: totalChunks,
+		}
+	} else {
+		p.ChunkInfo.ChunkIndex = chunkIdx
+	}
+	p.LastUpdated = time.Now()
 }
