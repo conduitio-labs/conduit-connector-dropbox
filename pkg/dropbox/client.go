@@ -27,9 +27,9 @@ import (
 var ErrEmptyAccessToken = fmt.Errorf("access token is required")
 
 const (
-	apiURL         = "https://api.dropboxapi.com/2"
-	contentURL     = "https://content.dropboxapi.com/2"
-	defaultTimeout = 30 * time.Second
+	apiURL     = "https://api.dropboxapi.com/2"
+	contentURL = "https://content.dropboxapi.com/2"
+	notifyURL  = "https://notify.dropboxapi.com/2"
 )
 
 type DropboxClient struct {
@@ -37,18 +37,18 @@ type DropboxClient struct {
 	httpClient  *http.Client
 }
 
-func NewDropboxClient(accessToken string) (*DropboxClient, error) {
+func NewDropboxClient(accessToken string, longpollTimeout int) (*DropboxClient, error) {
 	if accessToken == "" {
 		return nil, ErrEmptyAccessToken
 	}
 
 	return &DropboxClient{
 		accessToken: accessToken,
-		httpClient:  &http.Client{Timeout: defaultTimeout},
+		httpClient:  &http.Client{Timeout: time.Hour},
 	}, nil
 }
 
-func (c *DropboxClient) ListFolder(ctx context.Context, path string, recursive bool) ([]Entry, string, error) {
+func (c *DropboxClient) ListFolder(ctx context.Context, path string, recursive bool) ([]Entry, string, bool, error) {
 	req := struct {
 		Path      string `json:"path"`
 		Recursive bool   `json:"recursive"`
@@ -57,27 +57,38 @@ func (c *DropboxClient) ListFolder(ctx context.Context, path string, recursive b
 	var resp struct {
 		Entries []Entry `json:"entries"`
 		Cursor  string  `json:"cursor"`
+		HasMore bool    `json:"has_more"`
 	}
 
-	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder", nil, req, &resp); err != nil {
-		return nil, "", err
+	headers := map[string]string{
+		"Authorization": "Bearer " + c.accessToken,
+		"Content-Type":  "application/json",
 	}
 
-	return resp.Entries, resp.Cursor, nil
+	if err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder", headers, req, &resp); err != nil {
+		return nil, "", false, err
+	}
+
+	return resp.Entries, resp.Cursor, resp.HasMore, nil
 }
 
-func (c *DropboxClient) ListFolderContinue(ctx context.Context, cursor string) ([]Change, string, bool, error) {
+func (c *DropboxClient) ListFolderContinue(ctx context.Context, cursor string) ([]Entry, string, bool, error) {
 	req := struct {
 		Cursor string `json:"cursor"`
 	}{cursor}
 
 	var resp struct {
-		Entries []Change `json:"entries"`
-		Cursor  string   `json:"cursor"`
-		HasMore bool     `json:"has_more"`
+		Entries []Entry `json:"entries"`
+		Cursor  string  `json:"cursor"`
+		HasMore bool    `json:"has_more"`
 	}
 
-	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder/continue", nil, req, &resp); err != nil {
+	headers := map[string]string{
+		"Authorization": "Bearer " + c.accessToken,
+		"Content-Type":  "application/json",
+	}
+
+	if err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder/continue", headers, req, &resp); err != nil {
 		return nil, "", false, err
 	}
 
@@ -94,7 +105,11 @@ func (c *DropboxClient) ListFolderLongpoll(ctx context.Context, cursor string, t
 		Changes bool `json:"changes"`
 	}
 
-	if err := c.makeRequest(ctx, http.MethodPost, "/files/list_folder/longpoll", nil, req, &resp); err != nil {
+	header := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	if err := c.makeRequest(ctx, http.MethodPost, notifyURL+"/files/list_folder/longpoll", header, req, &resp); err != nil {
 		return false, "", err
 	}
 
@@ -144,19 +159,16 @@ func (c *DropboxClient) DownloadRange(ctx context.Context, path string, start, l
 	return resp.Body, nil
 }
 
-func (c *DropboxClient) makeRequest(ctx context.Context, method, endpoint string, headers map[string]string, reqBody, respBody interface{}) error {
+func (c *DropboxClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody, respBody any) error {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshal request failed: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, apiURL+endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request failed: %w", err)
 	}
-
-	req.Header.Set("Authorization", "Bearer "+c.accessToken)
-	req.Header.Set("Content-Type", "application/json")
 
 	for header, value := range headers {
 		req.Header.Set(header, value)

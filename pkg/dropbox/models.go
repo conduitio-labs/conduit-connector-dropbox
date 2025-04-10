@@ -26,8 +26,3 @@ type Entry struct {
 	Size           uint64    `json:"size,omitempty"`
 	ContentHash    string    `json:"content_hash,omitempty"`
 }
-
-type Change struct {
-	Type  string `json:".tag"` // "add", "remove", "update", etc.
-	Entry Entry  `json:"metadata"`
-}

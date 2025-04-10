@@ -26,6 +26,8 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
+const tagFile = "file"
+
 type Worker struct {
 	ctx                context.Context
 	client             dropbox.Client
@@ -34,7 +36,6 @@ type Worker struct {
 	fileChunkSizeBytes uint64
 	position           *Position
 	recordsCh          chan<- opencdc.Record
-	currentCursor      string
 	retries            int
 	pollingPeriod      time.Duration
 	wg                 *sync.WaitGroup
@@ -71,7 +72,7 @@ func (w *Worker) Start() {
 	retries := w.retries
 
 	for {
-		err := w.processChanges()
+		err := w.process()
 		if err != nil {
 			select {
 			case <-w.ctx.Done():
@@ -92,127 +93,149 @@ func (w *Worker) Start() {
 	}
 }
 
-func (w *Worker) processChanges() error {
-	// Initialize cursor if missing
-	if w.currentCursor == "" {
+func (w *Worker) process() error {
+	if w.position.getCursor() == "" {
 		return w.initialSync()
 	}
 
-	// Use longpoll for change detection
-	hasChanges, newCursor, err := w.client.ListFolderLongpoll(w.ctx, w.currentCursor, w.longpollTimeout)
+	// Using longpoll for change detection
+	hasChanges, cursor, err := w.client.ListFolderLongpoll(w.ctx, w.position.getCursor(), w.longpollTimeout)
 	if err != nil {
 		return fmt.Errorf("longpoll failed: %w", err)
 	}
+	// todo: handle if longpoll failed due to expired cursor.
+	w.position.updateCursor(cursor)
 
 	if !hasChanges {
 		return nil
 	}
 
-	// Get the actual changes
-	changes, newCursor, hasMore, err := w.client.ListFolderContinue(w.ctx, w.currentCursor)
+	// Get the actual entries
+	entries, cursor, hasMore, err := w.client.ListFolderContinue(w.ctx, w.position.getCursor())
 	if err != nil {
-		return fmt.Errorf("list continue failed: %w", err)
+		return fmt.Errorf("continue list failed: %w", err)
 	}
+	w.position.updateCursor(cursor)
 
-	w.currentCursor = newCursor
-	w.position.Cursor = newCursor
-
-	// Process changes
-	for _, change := range changes {
-		if err := w.processChange(change); err != nil {
-			return fmt.Errorf("process change failed: %w", err)
+	for _, entry := range entries {
+		if err := w.processFile(entry); err != nil {
+			return fmt.Errorf("process file failed: %w", err)
 		}
 	}
 
-	// Handle pagination
-	for hasMore {
-		changes, newCursor, hasMore, err = w.client.ListFolderContinue(w.ctx, w.currentCursor)
-		if err != nil {
-			return fmt.Errorf("pagination failed: %w", err)
-		}
-
-		w.currentCursor = newCursor
-		w.position.Cursor = newCursor
-
-		for _, change := range changes {
-			if err := w.processChange(change); err != nil {
-				return fmt.Errorf("process change failed: %w", err)
-			}
-		}
-	}
-
-	return nil
+	return w.handlePagination(hasMore)
 }
 
 func (w *Worker) initialSync() error {
-	entries, cursor, err := w.client.ListFolder(w.ctx, w.path, false)
+	entries, cursor, hasMore, err := w.client.ListFolder(w.ctx, w.path, false)
 	if err != nil {
 		return fmt.Errorf("initial list failed: %w", err)
 	}
-
-	w.currentCursor = cursor
-	w.position.Cursor = cursor
+	w.position.updateCursor(cursor)
 
 	for _, entry := range entries {
-		if entry.Tag == "file" {
+		if err := w.processFile(entry); err != nil {
+			return fmt.Errorf("process file failed: %w", err)
+		}
+	}
+
+	return w.handlePagination(hasMore)
+}
+
+func (w *Worker) handlePagination(hasMore bool) error {
+	var entries []dropbox.Entry
+	var cursor string
+	var err error
+
+	for hasMore {
+		entries, cursor, hasMore, err = w.client.ListFolderContinue(w.ctx, w.position.getCursor())
+		if err != nil {
+			return fmt.Errorf("continue list failed: %w", err)
+		}
+		w.position.updateCursor(cursor)
+
+		for _, entry := range entries {
 			if err := w.processFile(entry); err != nil {
 				return fmt.Errorf("process file failed: %w", err)
 			}
 		}
 	}
+
 	return nil
 }
 
-func (w *Worker) processChange(change dropbox.Change) error {
-	if change.Type == "removed" {
-		return nil // Skip deleted files for now
-	}
-	return w.processFile(change.Entry)
-}
-
 func (w *Worker) processFile(entry dropbox.Entry) error {
+	if entry.Tag != tagFile {
+		return nil
+	}
+
+	if entry.Tag == "deleted" {
+		return w.processDeletedFile(entry)
+	}
+
 	if entry.Size > w.fileChunkSizeBytes {
 		return w.processChunkedFile(entry)
 	}
 	return w.processFullFile(entry)
 }
 
+func (w *Worker) processDeletedFile(entry dropbox.Entry) error {
+	w.position.updateChunkInfo(nil)
+	position, err := w.position.marshal()
+	if err != nil {
+		return fmt.Errorf("marshal position: %w", err)
+	}
+
+	metadata := opencdc.Metadata{
+		"filename":  entry.Name,
+		"file_path": entry.PathDisplay,
+	}
+
+	record := sdk.Util.Source.NewRecordDelete(
+		position,
+		metadata,
+		opencdc.StructuredData{"file_path": entry.PathDisplay},
+		nil,
+	)
+
+	select {
+	case w.recordsCh <- record:
+		return nil
+	case <-w.ctx.Done():
+		return w.ctx.Err()
+	}
+}
+
 func (w *Worker) processChunkedFile(entry dropbox.Entry) error {
 	totalChunks := (entry.Size + w.fileChunkSizeBytes - 1) / w.fileChunkSizeBytes
 
-	// Continue from last chunk if resuming
-	startChunk := 0
-	if w.position.ChunkInfo != nil && w.position.ChunkInfo.FileID == entry.ID {
-		startChunk = w.position.ChunkInfo.ChunkIndex + 1
+	chunkInfo := w.position.getChunkInfo()
+
+	startChunk := 1
+	if chunkInfo != nil && chunkInfo.FileID == entry.ID {
+		startChunk = chunkInfo.ChunkIndex + 1
 	}
 
-	for chunkIdx := startChunk; chunkIdx < int(totalChunks); chunkIdx++ {
-		start := uint64(chunkIdx) * w.fileChunkSizeBytes
-		end := start + w.fileChunkSizeBytes
-		if end > entry.Size {
-			end = entry.Size
-		}
+	for chunkIdx := startChunk; chunkIdx <= int(totalChunks); chunkIdx++ {
+		start := uint64(chunkIdx-1) * w.fileChunkSizeBytes
+		end := min(start+w.fileChunkSizeBytes, entry.Size)
 
 		chunkData, err := w.downloadChunk(entry.PathDisplay, start, end-start)
 		if err != nil {
-			return fmt.Errorf("download chunk failed: %w", err)
+			return fmt.Errorf("download chunk %d failed: %w", chunkIdx, err)
 		}
 
-		record, err := w.createChunkRecord(entry, chunkIdx, int(totalChunks), chunkData)
+		record, err := w.createChunkedRecord(entry, chunkIdx, int(totalChunks), chunkData)
 		if err != nil {
 			return fmt.Errorf("create record failed: %w", err)
 		}
 
 		select {
 		case w.recordsCh <- record:
-			// Update position after successful send
-			w.position.updateFile(entry.ID, entry.PathDisplay)
-			w.position.updateChunk(entry.ID, entry.PathDisplay, chunkIdx, int(totalChunks))
 		case <-w.ctx.Done():
 			return w.ctx.Err()
 		}
 	}
-
 	return nil
 }
 
@@ -222,19 +245,17 @@ func (w *Worker) processFullFile(entry dropbox.Entry) error {
 		return fmt.Errorf("download failed: %w", err)
 	}
 
-	record, err := w.createFullFileRecord(entry, fileData)
+	record, err := w.createRecord(entry, fileData)
 	if err != nil {
 		return fmt.Errorf("create record failed: %w", err)
 	}
 
 	select {
 	case w.recordsCh <- record:
-		w.position.updateFile(entry.ID, entry.PathDisplay)
+		return nil
 	case <-w.ctx.Done():
 		return w.ctx.Err()
 	}
-
-	return nil
 }
 
 func (w *Worker) downloadChunk(path string, start, length uint64) ([]byte, error) {
@@ -247,8 +268,14 @@ func (w *Worker) downloadChunk(path string, start, length uint64) ([]byte, error
 	return io.ReadAll(reader)
 }
 
-func (w *Worker) createChunkRecord(entry dropbox.Entry, chunkIdx, totalChunks int, data []byte) (opencdc.Record, error) {
-	position, err := w.position.marshal()
+func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks int, data []byte) (opencdc.Record, error) {
+	w.position.updateChunkInfo(&ChunkInfo{
+		FileID:      entry.ID,
+		FilePath:    entry.PathDisplay,
+		ChunkIndex:  chunkIdx,
+		TotalChunks: totalChunks,
+	})
+	sdkPosition, err := w.position.marshal()
 	if err != nil {
 		return opencdc.Record{}, fmt.Errorf("marshal position: %w", err)
 	}
@@ -265,14 +292,15 @@ func (w *Worker) createChunkRecord(entry dropbox.Entry, chunkIdx, totalChunks in
 	}
 
 	return sdk.Util.Source.NewRecordCreate(
-		position,
+		sdkPosition,
 		metadata,
-		opencdc.StructuredData{"file_id": entry.ID},
+		opencdc.StructuredData{"file_path": entry.PathDisplay},
 		opencdc.RawData(data),
 	), nil
 }
 
-func (w *Worker) createFullFileRecord(entry dropbox.Entry, data []byte) (opencdc.Record, error) {
+func (w *Worker) createRecord(entry dropbox.Entry, data []byte) (opencdc.Record, error) {
+	w.position.updateChunkInfo(nil)
 	position, err := w.position.marshal()
 	if err != nil {
 		return opencdc.Record{}, fmt.Errorf("marshal position: %w", err)
@@ -289,7 +317,7 @@ func (w *Worker) createFullFileRecord(entry dropbox.Entry, data []byte) (opencdc
 	return sdk.Util.Source.NewRecordCreate(
 		position,
 		metadata,
-		opencdc.StructuredData{"file_id": entry.ID},
+		opencdc.StructuredData{"file_path": entry.PathDisplay},
 		opencdc.RawData(data),
 	), nil
 }
