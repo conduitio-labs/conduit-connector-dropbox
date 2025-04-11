@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dropbox
+package source
 
 import (
 	"context"
@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-dropbox/config"
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
-	"github.com/conduitio-labs/conduit-connector-dropbox/source"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
@@ -34,16 +34,16 @@ var (
 type Source struct {
 	sdk.UnimplementedSource
 
-	config   SourceConfig
-	position *source.Position
+	config   Config
+	position *Position
 	client   dropbox.Client
 	ch       chan opencdc.Record
 	wg       *sync.WaitGroup
 }
 
-type SourceConfig struct {
+type Config struct {
 	sdk.DefaultSourceMiddleware
-	Config
+	config.Config
 
 	// Timeout (in seconds) for Dropbox longpolling requests.
 	LongpollTimeout int `json:"longpollTimeout" default:"30"`
@@ -67,7 +67,7 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 	sdk.Logger(ctx).Info().Msg("Opening Dropbox source")
 
 	var err error
-	s.position, err = source.ParseSDKPosition(position)
+	s.position, err = ParseSDKPosition(position)
 	if err != nil {
 		return fmt.Errorf("error parsing sdk position: %w", err)
 	}
@@ -83,15 +83,11 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 	// Start worker
 	s.wg.Add(1)
 	go func() {
-		source.NewWorker(
+		NewWorker(
 			s.client,
-			s.config.Path,
-			s.config.LongpollTimeout,
-			s.config.FileChunkSizeBytes,
+			s.config,
 			s.position,
 			s.ch,
-			s.config.Retries,
-			s.config.RetryDelay,
 			s.wg,
 		).Start(ctx)
 	}()
