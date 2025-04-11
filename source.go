@@ -45,14 +45,14 @@ type SourceConfig struct {
 	sdk.DefaultSourceMiddleware
 	Config
 
-	// Interval to poll for changes when longpolling fails.
-	PollingPeriod time.Duration `json:"pollingPeriod" default:"10s"`
-	// Number of seconds to wait for changes during longpolling.
+	// Timeout (in seconds) for Dropbox longpolling requests.
 	LongpollTimeout int `json:"longpollTimeout" default:"30"`
-	// Maximum size of a file chunk in bytes to split large files, default is 3MB.
+	// Size of a file chunk in bytes to split large files, maximum is 4MB.
 	FileChunkSizeBytes uint64 `json:"fileChunkSizeBytes" default:"3145728"`
-	// The maximum number of retries of failed operations.
+	// Maximum number of retry attempts.
 	Retries int `json:"retries" default:"0"`
+	// Delay between retry attempts.
+	RetryDelay time.Duration `json:"retryDelay" default:"10s"`
 }
 
 func NewSource() sdk.Source {
@@ -69,12 +69,12 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 	var err error
 	s.position, err = source.ParseSDKPosition(position)
 	if err != nil {
-		return err
+		return fmt.Errorf("error parsing sdk position: %w", err)
 	}
 
-	s.client, err = dropbox.NewDropboxClient(s.config.Token, s.config.LongpollTimeout)
+	s.client, err = dropbox.NewHTTPClient(s.config.Token, s.config.LongpollTimeout)
 	if err != nil {
-		return fmt.Errorf("error creating dropbox client: %w", err)
+		return fmt.Errorf("error creating http client for dropbox: %w", err)
 	}
 
 	s.ch = make(chan opencdc.Record, 1)
@@ -84,7 +84,6 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 	s.wg.Add(1)
 	go func() {
 		source.NewWorker(
-			ctx,
 			s.client,
 			s.config.Path,
 			s.config.LongpollTimeout,
@@ -92,9 +91,9 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 			s.position,
 			s.ch,
 			s.config.Retries,
-			s.config.PollingPeriod,
+			s.config.RetryDelay,
 			s.wg,
-		).Start()
+		).Start(ctx)
 	}()
 
 	return nil
@@ -111,9 +110,6 @@ func (s *Source) ReadN(ctx context.Context, n int) ([]opencdc.Record, error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case record, ok := <-s.ch:
-			if ok {
-				fmt.Println("got record --------- ", record.Metadata)
-			}
 			if !ok {
 				if len(records) == 0 {
 					return nil, ErrReadingData

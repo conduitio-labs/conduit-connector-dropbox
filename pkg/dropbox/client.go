@@ -18,13 +18,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-var ErrEmptyAccessToken = fmt.Errorf("access token is required")
+var (
+	ErrEmptyAccessToken = errors.New("access token is required")
+	ErrExpiredCursor    = errors.New("dropbox: expired cursor")
+	ErrDropboxAPI       = errors.New("dropbox API error")
+)
 
 const (
 	apiURL     = "https://api.dropboxapi.com/2"
@@ -32,23 +38,25 @@ const (
 	notifyURL  = "https://notify.dropboxapi.com/2"
 )
 
-type DropboxClient struct {
+type HTTPClient struct {
 	accessToken string
 	httpClient  *http.Client
 }
 
-func NewDropboxClient(accessToken string, longpollTimeout int) (*DropboxClient, error) {
+// NewHTTPClient creates a new Dropbox Client with the given access token and longpoll timeout.
+// It adds a 90-second buffer to account for Dropbox's jitter in longpoll requests.
+func NewHTTPClient(accessToken string, longpollTimeout int) (*HTTPClient, error) {
 	if accessToken == "" {
 		return nil, ErrEmptyAccessToken
 	}
 
-	return &DropboxClient{
+	return &HTTPClient{
 		accessToken: accessToken,
-		httpClient:  &http.Client{Timeout: time.Hour},
+		httpClient:  &http.Client{Timeout: time.Duration(longpollTimeout+90) * time.Second},
 	}, nil
 }
 
-func (c *DropboxClient) ListFolder(ctx context.Context, path string, recursive bool) ([]Entry, string, bool, error) {
+func (c *HTTPClient) List(ctx context.Context, path string, recursive bool) ([]Entry, string, bool, error) {
 	req := struct {
 		Path      string `json:"path"`
 		Recursive bool   `json:"recursive"`
@@ -72,7 +80,7 @@ func (c *DropboxClient) ListFolder(ctx context.Context, path string, recursive b
 	return resp.Entries, resp.Cursor, resp.HasMore, nil
 }
 
-func (c *DropboxClient) ListFolderContinue(ctx context.Context, cursor string) ([]Entry, string, bool, error) {
+func (c *HTTPClient) ListContinue(ctx context.Context, cursor string) ([]Entry, string, bool, error) {
 	req := struct {
 		Cursor string `json:"cursor"`
 	}{cursor}
@@ -95,7 +103,7 @@ func (c *DropboxClient) ListFolderContinue(ctx context.Context, cursor string) (
 	return resp.Entries, resp.Cursor, resp.HasMore, nil
 }
 
-func (c *DropboxClient) ListFolderLongpoll(ctx context.Context, cursor string, timeoutSec int) (bool, string, error) {
+func (c *HTTPClient) Longpoll(ctx context.Context, cursor string, timeoutSec int) (bool, error) {
 	req := struct {
 		Cursor  string `json:"cursor"`
 		Timeout int    `json:"timeout"`
@@ -110,13 +118,13 @@ func (c *DropboxClient) ListFolderLongpoll(ctx context.Context, cursor string, t
 	}
 
 	if err := c.makeRequest(ctx, http.MethodPost, notifyURL+"/files/list_folder/longpoll", header, req, &resp); err != nil {
-		return false, "", err
+		return false, err
 	}
 
-	return resp.Changes, cursor, nil
+	return resp.Changes, nil
 }
 
-func (c *DropboxClient) DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error) {
+func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error) {
 	reqBody := struct {
 		Path string `json:"path"`
 	}{
@@ -159,7 +167,7 @@ func (c *DropboxClient) DownloadRange(ctx context.Context, path string, start, l
 	return resp.Body, nil
 }
 
-func (c *DropboxClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody, respBody any) error {
+func (c *HTTPClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody, respBody any) error {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshal request failed: %w", err)
@@ -192,13 +200,22 @@ func (c *DropboxClient) makeRequest(ctx context.Context, method, url string, hea
 }
 
 func parseError(resp *http.Response) error {
-	var errResp struct {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read error response: %w", err)
+	}
+
+	var jsonErr struct {
 		ErrorSummary string `json:"error_summary"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-		return fmt.Errorf("API error (status %d)", resp.StatusCode)
+	if err := json.Unmarshal(body, &jsonErr); err == nil && jsonErr.ErrorSummary != "" {
+		switch {
+		case strings.HasPrefix(jsonErr.ErrorSummary, "reset/"):
+			return ErrExpiredCursor
+		default:
+			return fmt.Errorf("%w: %s", ErrDropboxAPI, jsonErr.ErrorSummary)
+		}
 	}
 
-	return fmt.Errorf("API error: %s", errResp.ErrorSummary)
+	return fmt.Errorf("%w (status %d): %s", ErrDropboxAPI, resp.StatusCode, string(body))
 }

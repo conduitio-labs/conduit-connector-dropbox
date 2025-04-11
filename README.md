@@ -26,12 +26,11 @@ pipelines:
           # Type: string
           # Required: yes
           token: ""
-          # Maximum size of a file chunk in bytes to split large files, default
-          # is 3MB.
+          # Size of a file chunk in bytes to split large files, maximum is 4MB.
           # Type: int
           # Required: no
           fileChunkSizeBytes: "3145728"
-          # Number of seconds to wait for changes during longpolling.
+          # Timeout (in seconds) for Dropbox longpolling requests.
           # Type: int
           # Required: no
           longpollTimeout: "30"
@@ -40,14 +39,14 @@ pipelines:
           # Type: string
           # Required: no
           path: ""
-          # Interval to poll for changes when longpolling fails.
-          # Type: duration
-          # Required: no
-          pollingPeriod: "10s"
-          # The maximum number of retries of failed operations.
+          # Maximum number of retry attempts.
           # Type: int
           # Required: no
           retries: "0"
+          # Delay between retry attempts.
+          # Type: duration
+          # Required: no
+          retryDelay: "10s"
           # Maximum delay before an incomplete batch is read from the source.
           # Type: duration
           # Required: no
