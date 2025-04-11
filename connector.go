@@ -19,6 +19,7 @@ package dropbox
 import (
 	_ "embed"
 
+	"github.com/conduitio-labs/conduit-connector-dropbox/source"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
@@ -29,6 +30,6 @@ var version = "(devel)"
 
 var Connector = sdk.Connector{
 	NewSpecification: sdk.YAMLSpecification(specs, version),
-	NewSource:        NewSource,
+	NewSource:        source.NewSource,
 	NewDestination:   NewDestination,
 }

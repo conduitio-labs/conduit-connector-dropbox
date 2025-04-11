@@ -33,46 +33,34 @@ const (
 )
 
 type Worker struct {
-	client             dropbox.Client
-	path               string
-	longpollTimeout    int
-	fileChunkSizeBytes uint64
-	position           *Position
-	recordsCh          chan<- opencdc.Record
-	retries            int
-	retryDelay         time.Duration
-	wg                 *sync.WaitGroup
+	client    dropbox.Client
+	config    Config
+	position  *Position
+	recordsCh chan<- opencdc.Record
+	wg        *sync.WaitGroup
 }
 
 // NewWorker creates a new worker instance with the given configuration.
 func NewWorker(
 	client dropbox.Client,
-	path string,
-	longpollTimeout int,
-	fileChunkSizeBytes uint64,
+	config Config,
 	position *Position,
 	recordsCh chan<- opencdc.Record,
-	retries int,
-	retryDelay time.Duration,
 	wg *sync.WaitGroup,
 ) *Worker {
 	return &Worker{
-		client:             client,
-		path:               path,
-		longpollTimeout:    longpollTimeout,
-		fileChunkSizeBytes: fileChunkSizeBytes,
-		position:           position,
-		recordsCh:          recordsCh,
-		retries:            retries,
-		retryDelay:         retryDelay,
-		wg:                 wg,
+		client:    client,
+		config:    config,
+		position:  position,
+		recordsCh: recordsCh,
+		wg:        wg,
 	}
 }
 
 // Start begins processing files and handles retries on errors.
 func (w *Worker) Start(ctx context.Context) {
 	defer w.wg.Done()
-	retries := w.retries
+	retries := w.config.Retries
 
 	for {
 		err := w.process(ctx)
@@ -81,7 +69,7 @@ func (w *Worker) Start(ctx context.Context) {
 			case <-ctx.Done():
 				sdk.Logger(ctx).Debug().Msg("worker shutting down...")
 				return
-			case <-time.After(w.retryDelay):
+			case <-time.After(w.config.RetryDelay):
 				if retries == 0 {
 					sdk.Logger(ctx).Err(err).Msg("retries exhausted, worker shutting down...")
 					return
@@ -92,7 +80,7 @@ func (w *Worker) Start(ctx context.Context) {
 			}
 		}
 		// Reset retries on successful operation
-		retries = w.retries
+		retries = w.config.Retries
 	}
 }
 
@@ -103,7 +91,7 @@ func (w *Worker) process(ctx context.Context) error {
 	}
 
 	// Using longpoll for change detection
-	hasChanges, err := w.client.Longpoll(ctx, w.position.getCursor(), w.longpollTimeout)
+	hasChanges, err := w.client.Longpoll(ctx, w.position.getCursor(), w.config.LongpollTimeout)
 	if err != nil {
 		return w.handleCursorError(ctx, "longpoll", err)
 	}
@@ -129,7 +117,7 @@ func (w *Worker) process(ctx context.Context) error {
 
 // initialSync performs the first complete sync of the target path.
 func (w *Worker) initialSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.path, false)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false)
 	if err != nil {
 		return fmt.Errorf("list failed: %w", err)
 	}
@@ -146,7 +134,7 @@ func (w *Worker) initialSync(ctx context.Context) error {
 
 // reSync performs a full resync when the cursor expires.
 func (w *Worker) reSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.path, false)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false)
 	if err != nil {
 		return fmt.Errorf("resync list failed: %w", err)
 	}
@@ -198,7 +186,7 @@ func (w *Worker) processFile(ctx context.Context, entry dropbox.Entry) error {
 		return w.processDeletedFile(ctx, entry)
 	}
 
-	if entry.Size > w.fileChunkSizeBytes {
+	if entry.Size > w.config.FileChunkSizeBytes {
 		return w.processChunkedFile(ctx, entry)
 	}
 	return w.processFullFile(ctx, entry)
@@ -234,7 +222,7 @@ func (w *Worker) processDeletedFile(ctx context.Context, entry dropbox.Entry) er
 
 // processChunkedFile processes large files in chunks.
 func (w *Worker) processChunkedFile(ctx context.Context, entry dropbox.Entry) error {
-	totalChunks := (entry.Size + w.fileChunkSizeBytes - 1) / w.fileChunkSizeBytes
+	totalChunks := (entry.Size + w.config.FileChunkSizeBytes - 1) / w.config.FileChunkSizeBytes
 
 	chunkInfo := w.position.getChunkInfo()
 
@@ -244,8 +232,8 @@ func (w *Worker) processChunkedFile(ctx context.Context, entry dropbox.Entry) er
 	}
 
 	for chunkIdx := startChunk; chunkIdx <= totalChunks; chunkIdx++ {
-		start := (chunkIdx - 1) * w.fileChunkSizeBytes
-		end := min(start+w.fileChunkSizeBytes, entry.Size)
+		start := (chunkIdx - 1) * w.config.FileChunkSizeBytes
+		end := min(start+w.config.FileChunkSizeBytes, entry.Size)
 
 		chunkData, err := w.downloadChunk(ctx, entry.PathDisplay, start, end-start)
 		if err != nil {
