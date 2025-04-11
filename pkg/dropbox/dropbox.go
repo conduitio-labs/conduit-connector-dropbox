@@ -25,8 +25,8 @@ type Client interface {
 	Longpoll(ctx context.Context, cursor string, timeoutSec int) (bool, error)
 	DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error)
 	UploadFile(ctx context.Context, filepath string, content []byte) (*UploadFileResponse, error)
-	CreateSession(ctx context.Context, filepath string, content []byte) (*SessionResponse, error)
-	UploadChunk(ctx context.Context, filepath, sessionId string, content []byte, offset uint) error
-	CloseSession(ctx context.Context, filepath, sessionid string, offset uint) (*UploadFileResponse, error)
+	CreateSession(ctx context.Context, content []byte) (*SessionResponse, error)
+	UploadChunk(ctx context.Context, sessionID string, content []byte, offset uint) error
+	CloseSession(ctx context.Context, filepath, sessionID string, offset uint) (*UploadFileResponse, error)
 	DeleteFile(ctx context.Context, filepath string) error
 }

@@ -192,7 +192,7 @@ func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, leng
 }
 
 type UploadFileResponse struct {
-	Id          string `json:"id"`
+	ID          string `json:"id"`
 	ContentHash string `json:"content_hash"`
 	Name        string `json:"name"`
 	PathDisplay string `json:"path_display"`
@@ -223,7 +223,7 @@ type SessionResponse struct {
 }
 
 // CreateSession uploads the first chunk of the file and creates a session for remaining chunks.
-func (c *HTTPClient) CreateSession(ctx context.Context, filepath string, content []byte) (*SessionResponse, error) {
+func (c *HTTPClient) CreateSession(ctx context.Context, content []byte) (*SessionResponse, error) {
 	response := &SessionResponse{}
 	headers := map[string]string{
 		"Authorization":   "Bearer " + c.accessToken,
@@ -241,9 +241,9 @@ func (c *HTTPClient) CreateSession(ctx context.Context, filepath string, content
 	return response, nil
 }
 
-func (c *HTTPClient) UploadChunk(ctx context.Context, filepath, sessionId string, content []byte, offset uint) error {
+func (c *HTTPClient) UploadChunk(ctx context.Context, sessionID string, content []byte, offset uint) error {
 	cursor := map[string]interface{}{
-		"session_id": sessionId,
+		"session_id": sessionID,
 		"offset":     offset,
 	}
 	arg := map[string]interface{}{

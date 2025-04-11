@@ -22,7 +22,7 @@ import (
 var ErrInvalidSession = fmt.Errorf("invalid session")
 
 type cursor struct {
-	sessionId string
+	sessionID string
 	offset    uint
 }
 
@@ -37,32 +37,32 @@ func NewSession() *Session {
 	}
 }
 
-func (s *Session) startSession(fileId, sessionId string, offset uint) {
+func (s *Session) startSession(fileID, sessionID string, offset uint) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.sessions[fileId] = cursor{sessionId, offset}
+	s.sessions[fileID] = cursor{sessionID, offset}
 }
 
-func (s *Session) updateSession(fileId string, offset uint) error {
+func (s *Session) updateSession(fileID string, offset uint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	val, ok := s.sessions[fileId]
+	val, ok := s.sessions[fileID]
 	if !ok {
 		return ErrInvalidSession
 	}
-	s.sessions[fileId] = cursor{val.sessionId, val.offset + offset}
+	s.sessions[fileID] = cursor{val.sessionID, val.offset + offset}
 	return nil
 }
 
-func (s *Session) closeSession(fileId string) {
+func (s *Session) closeSession(fileID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.sessions, fileId)
+	delete(s.sessions, fileID)
 }
 
-func (s *Session) getSession(fileId string) (cursor, bool) {
+func (s *Session) getSession(fileID string) (cursor, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	val, ok := s.sessions[fileId]
+	val, ok := s.sessions[fileID]
 	return val, ok
 }

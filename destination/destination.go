@@ -55,8 +55,8 @@ func (d *Destination) Open(ctx context.Context) error {
 
 func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int, error) {
 	for i, record := range records {
-		switch record.Operation {
-		case opencdc.OperationDelete:
+		switch {
+		case record.Operation == opencdc.OperationDelete:
 			filepath, ok := record.Metadata["file_path"]
 			if !ok {
 				return i, ErrMissingFilePath
@@ -118,36 +118,37 @@ func (d *Destination) uploadChunkedRecord(ctx context.Context, r opencdc.Record)
 	}
 
 	if metaData.index == 1 {
-		response, err := d.client.CreateSession(ctx, metaData.filepath, r.Payload.After.Bytes())
+		response, err := d.client.CreateSession(ctx, r.Payload.After.Bytes())
 		if err != nil {
 			return fmt.Errorf("error creating upload session: %w", err)
 		}
-		d.session.startSession(metaData.fileId, response.SessionID, uint(len(r.Payload.After.Bytes())))
-	} else {
-		sess, ok := d.session.getSession(metaData.fileId)
-		if !ok {
-			return fmt.Errorf("invalid session")
-		}
-		err := d.client.UploadChunk(ctx, metaData.filepath, sess.sessionId, r.Payload.After.Bytes(), sess.offset)
-		if err != nil {
-			return fmt.Errorf("error uploading chunk: %w", err)
-		}
-		err = d.session.updateSession(metaData.fileId, uint(len(r.Payload.After.Bytes())))
-		if err != nil {
-			return err
-		}
+		d.session.startSession(metaData.fileID, response.SessionID, uint(len(r.Payload.After.Bytes())))
+		return nil
+	}
+
+	sess, ok := d.session.getSession(metaData.fileID)
+	if !ok {
+		return ErrInvalidSession
+	}
+	err = d.client.UploadChunk(ctx, sess.sessionID, r.Payload.After.Bytes(), sess.offset)
+	if err != nil {
+		return fmt.Errorf("error uploading chunk: %w", err)
+	}
+	err = d.session.updateSession(metaData.fileID, uint(len(r.Payload.After.Bytes())))
+	if err != nil {
+		return err
 	}
 
 	if metaData.index == metaData.totalChunks {
-		sess, _ := d.session.getSession(metaData.fileId)
-		response, err := d.client.CloseSession(ctx, metaData.filepath, sess.sessionId, sess.offset)
+		sess, _ := d.session.getSession(metaData.fileID)
+		response, err := d.client.CloseSession(ctx, metaData.filepath, sess.sessionID, sess.offset)
 		if err != nil {
-			return err
+			return fmt.Errorf("error closing upload session: %w", err)
 		}
-		if response.ContentHash != metaData.hash || response.Size != uint64(metaData.filesize) {
+		if response.ContentHash != metaData.hash || response.Size != metaData.filesize {
 			return fmt.Errorf("corrupt file upload: %w", err)
 		}
-		d.session.closeSession(metaData.fileId)
+		d.session.closeSession(metaData.fileID)
 	}
 
 	return nil
@@ -157,84 +158,73 @@ type metadata struct {
 	index       int64
 	totalChunks int64
 	hash        string
-	fileId      string
+	fileID      string
 	filename    string
 	filepath    string
-	filesize    int64
+	filesize    uint64
 }
 
 func (d *Destination) extractMetadata(record opencdc.Record) (metadata, error) {
-	var index, total int64
+	meta := metadata{}
+	var ok bool
 	chunked, ok := record.Metadata["is_chunked"]
 	if ok && chunked == "true" {
 		chunkIndex, ok := record.Metadata["chunk_index"]
 		if !ok {
 			return metadata{}, NewInvalidChunkError("chunk_index not found")
 		}
-
 		var err error
-		index, err = strconv.ParseInt(chunkIndex, 10, 64)
+		meta.index, err = strconv.ParseInt(chunkIndex, 10, 64)
 		if err != nil {
 			return metadata{}, fmt.Errorf("failed to parse chunk_index: %w", err)
 		}
-
-		totalChunks, ok := record.Metadata["total_chunks"]
+		total, ok := record.Metadata["total_chunks"]
 		if !ok {
 			return metadata{}, NewInvalidChunkError("total_chunk not found")
 		}
-
-		total, err = strconv.ParseInt(totalChunks, 10, 64)
+		meta.totalChunks, err = strconv.ParseInt(total, 10, 64)
 		if err != nil {
 			return metadata{}, fmt.Errorf("failed to parse total_chunks: %w", err)
 		}
 	}
 
-	hash, ok := record.Metadata["hash"]
-	if !ok {
-		return metadata{}, NewInvalidChunkError("hash not found")
-	}
-
-	filename, ok := record.Metadata["filename"]
+	meta.filename, ok = record.Metadata["filename"]
 	if !ok {
 		structuredKey, err := d.structurizeData(record.Key)
 		if err != nil {
-			filename = string(record.Key.Bytes())
+			meta.filename = string(record.Key.Bytes())
 		} else {
 			name, ok := structuredKey["filename"].(string)
 			if !ok {
 				return metadata{}, NewInvalidChunkError("invalid filename")
 			}
-			filename = name
+			meta.filename = name
 		}
 	}
 
+	meta.hash, ok = record.Metadata["hash"]
+	if !ok {
+		return metadata{}, NewInvalidChunkError("hash not found")
+	}
 	fileSize, ok := record.Metadata["file_size"]
 	if !ok {
 		return metadata{}, NewInvalidChunkError("file_size not found")
 	}
-	size, err := strconv.ParseInt(fileSize, 10, 64)
+	var err error
+	meta.filesize, err = strconv.ParseUint(fileSize, 10, 64)
 	if err != nil {
 		return metadata{}, fmt.Errorf("failed to parse file_size: %w", err)
 	}
-
-	filepath, ok := record.Metadata["file_path"]
+	meta.filepath, ok = record.Metadata["file_path"]
 	if !ok {
 		return metadata{}, NewInvalidChunkError("file_path not found")
 	}
-	fileid, ok := record.Metadata["file_id"]
+	meta.fileID, ok = record.Metadata["file_id"]
 	if !ok {
 		return metadata{}, NewInvalidChunkError("file_id not found")
 	}
 
-	return metadata{
-		index:       index,
-		totalChunks: total,
-		hash:        hash,
-		fileId:      fileid,
-		filename:    filename,
-		filesize:    size,
-		filepath:    filepath,
-	}, nil
+	return meta, nil
 }
 
 func (d *Destination) structurizeData(data opencdc.Data) (opencdc.StructuredData, error) {

@@ -18,9 +18,11 @@ import (
 	"fmt"
 )
 
-var ErrMissingUploadDirectory = fmt.Errorf("missing upload directory")
-var ErrMissingFilePath = fmt.Errorf("missing file path")
-var ErrInvalidHash = fmt.Errorf("missing or invalid content hash")
+var (
+	ErrMissingUploadDirectory = fmt.Errorf("missing upload directory")
+	ErrMissingFilePath        = fmt.Errorf("missing file path")
+	ErrInvalidHash            = fmt.Errorf("missing or invalid content hash")
+)
 
 type InvalidChunkError struct {
 	message string
