@@ -21,8 +21,7 @@ type Entry struct {
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
 	PathDisplay    string    `json:"path_display"`
-	ClientModified time.Time `json:"client_modified,omitempty"`
-	ServerModified time.Time `json:"server_modified,omitempty"`
+	ServerModified time.Time `json:"server_modified"`
 	Size           uint64    `json:"size,omitempty"`
 	ContentHash    string    `json:"content_hash,omitempty"`
 }

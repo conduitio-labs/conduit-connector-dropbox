@@ -25,14 +25,15 @@ import (
 type ChunkInfo struct {
 	FileID      string `json:"file_id"`
 	FilePath    string `json:"file_path"`
-	ChunkIndex  int    `json:"chunk_index"`
-	TotalChunks int    `json:"total_chunks"`
+	ChunkIndex  uint64 `json:"chunk_index"`
+	TotalChunks uint64 `json:"total_chunks"`
 }
 
 type Position struct {
-	mu        sync.Mutex
-	Cursor    string     `json:"cursor"`
-	ChunkInfo *ChunkInfo `json:"chunk_info"`
+	mu                    sync.Mutex
+	Cursor                string     `json:"cursor"`
+	ChunkInfo             *ChunkInfo `json:"chunk_info"`
+	LastProcessedUnixTime int64      `json:"last_processed_unix_time"`
 }
 
 func NewPosition() *Position {
@@ -76,6 +77,13 @@ func (p *Position) updateCursor(cursor string) {
 	p.Cursor = cursor
 }
 
+func (p *Position) updateLastProcessedTime(unixTime int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.LastProcessedUnixTime = unixTime
+}
+
 func (p *Position) getCursor() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -88,4 +96,11 @@ func (p *Position) getChunkInfo() *ChunkInfo {
 	defer p.mu.Unlock()
 
 	return p.ChunkInfo
+}
+
+func (p *Position) getLastProcessedTime() int64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.LastProcessedUnixTime
 }
