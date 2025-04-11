@@ -57,15 +57,14 @@ func NewHTTPClient(accessToken string, longpollTimeout int) (*HTTPClient, error)
 }
 
 func (c *HTTPClient) List(ctx context.Context, path string, recursive bool) ([]Entry, string, bool, error) {
-	req := struct {
+	reqBody := struct {
 		Path      string `json:"path"`
 		Recursive bool   `json:"recursive"`
 	}{path, recursive}
 
-	var resp struct {
-		Entries []Entry `json:"entries"`
-		Cursor  string  `json:"cursor"`
-		HasMore bool    `json:"has_more"`
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("marshal request failed: %w", err)
 	}
 
 	headers := map[string]string{
@@ -73,22 +72,33 @@ func (c *HTTPClient) List(ctx context.Context, path string, recursive bool) ([]E
 		"Content-Type":  "application/json",
 	}
 
-	if err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder", headers, req, &resp); err != nil {
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder", headers, bytes.NewReader(body))
+	if err != nil {
 		return nil, "", false, err
 	}
+	defer resp.Body.Close()
 
-	return resp.Entries, resp.Cursor, resp.HasMore, nil
+	var parsed struct {
+		Entries []Entry `json:"entries"`
+		Cursor  string  `json:"cursor"`
+		HasMore bool    `json:"has_more"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, "", false, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return parsed.Entries, parsed.Cursor, parsed.HasMore, nil
 }
 
 func (c *HTTPClient) ListContinue(ctx context.Context, cursor string) ([]Entry, string, bool, error) {
-	req := struct {
+	reqBody := struct {
 		Cursor string `json:"cursor"`
 	}{cursor}
 
-	var resp struct {
-		Entries []Entry `json:"entries"`
-		Cursor  string  `json:"cursor"`
-		HasMore bool    `json:"has_more"`
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("marshal request failed: %w", err)
 	}
 
 	headers := map[string]string{
@@ -96,86 +106,96 @@ func (c *HTTPClient) ListContinue(ctx context.Context, cursor string) ([]Entry, 
 		"Content-Type":  "application/json",
 	}
 
-	if err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder/continue", headers, req, &resp); err != nil {
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder/continue", headers, bytes.NewReader(body))
+	if err != nil {
 		return nil, "", false, err
 	}
+	defer resp.Body.Close()
 
-	return resp.Entries, resp.Cursor, resp.HasMore, nil
+	var parsed struct {
+		Entries []Entry `json:"entries"`
+		Cursor  string  `json:"cursor"`
+		HasMore bool    `json:"has_more"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, "", false, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return parsed.Entries, parsed.Cursor, parsed.HasMore, nil
 }
 
 func (c *HTTPClient) Longpoll(ctx context.Context, cursor string, timeoutSec int) (bool, error) {
-	req := struct {
+	reqBody := struct {
 		Cursor  string `json:"cursor"`
 		Timeout int    `json:"timeout"`
 	}{cursor, timeoutSec}
 
-	var resp struct {
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return false, fmt.Errorf("marshal request failed: %w", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type": "application/json", // No Authorization required for this endpoint
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, notifyURL+"/files/list_folder/longpoll", headers, bytes.NewReader(body))
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	var parsed struct {
 		Changes bool `json:"changes"`
 	}
 
-	header := map[string]string{
-		"Content-Type": "application/json",
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return false, fmt.Errorf("decode response failed: %w", err)
 	}
 
-	if err := c.makeRequest(ctx, http.MethodPost, notifyURL+"/files/list_folder/longpoll", header, req, &resp); err != nil {
-		return false, err
-	}
-
-	return resp.Changes, nil
+	return parsed.Changes, nil
 }
 
 func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error) {
-	reqBody := struct {
+	argHeader, err := json.Marshal(struct {
 		Path string `json:"path"`
 	}{
 		Path: path,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("marshal request failed: %w", err)
+		return nil, fmt.Errorf("marshal dropbox-api-arg failed: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		contentURL+"/files/download",
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create request failed: %w", err)
+	headers := map[string]string{
+		"Authorization":   "Bearer " + c.accessToken,
+		"Dropbox-API-Arg": string(argHeader),
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.accessToken)
-	req.Header.Set("Dropbox-API-Arg", string(bodyBytes))
-
-	// Set Range header.
+	// Add Range header if partial download is requested
 	if length > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, start+length-1))
+		headers["Range"] = fmt.Sprintf("bytes=%d-%d", start, start+length-1)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/download", headers, nil)
 	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
+		return nil, err
 	}
 
+	// Accept both full and partial responses
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		resp.Body.Close()
+		defer resp.Body.Close()
 		return nil, parseError(resp)
 	}
 
 	return resp.Body, nil
 }
 
-func (c *HTTPClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody, respBody any) error {
-	body, err := json.Marshal(reqBody)
+//nolint:unparam // method may be used for non-POST in future
+func (c *HTTPClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody io.Reader) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
-		return fmt.Errorf("marshal request failed: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create request failed: %w", err)
+		return nil, fmt.Errorf("create request failed: %w", err)
 	}
 
 	for header, value := range headers {
@@ -184,19 +204,15 @@ func (c *HTTPClient) makeRequest(ctx context.Context, method, url string, header
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return parseError(resp)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(respBody); err != nil {
-		return fmt.Errorf("decode response failed: %w", err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, parseError(resp)
 	}
 
-	return nil
+	return resp, nil
 }
 
 func parseError(resp *http.Response) error {
