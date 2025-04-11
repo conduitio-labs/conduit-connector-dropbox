@@ -108,13 +108,6 @@ specification:
         validations:
           - type: required
             value: ""
-      - name: destinationConfigParam
-        description: DestinationConfigParam must be either yes or no (defaults to yes).
-        type: string
-        default: "yes"
-        validations:
-          - type: inclusion
-            value: yes,no
       - name: path
         description: Path of the Dropbox directory to read/write files. Empty path implies root directory.
         type: string

@@ -191,6 +191,143 @@ func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, leng
 	return resp.Body, nil
 }
 
+type UploadFileResponse struct {
+	Id          string `json:"id"`
+	ContentHash string `json:"content_hash"`
+	Name        string `json:"name"`
+	PathDisplay string `json:"path_display"`
+	Size        uint64 `json:"size"`
+}
+
+// UploadFile uploads a file to remote dropbox filepath.
+func (c *HTTPClient) UploadFile(ctx context.Context, filepath string, content []byte) (*UploadFileResponse, error) {
+	response := &UploadFileResponse{}
+	headers := map[string]string{
+		"Authorization":   "Bearer " + c.accessToken,
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": fmt.Sprintf(`{"path": "%s","mode": "overwrite","mute": false}`, filepath),
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload", headers, bytes.NewReader(content))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+	resp.Body.Close()
+	return response, nil
+}
+
+type SessionResponse struct {
+	SessionID string `json:"session_id"`
+}
+
+// CreateSession uploads the first chunk of the file and creates a session for remaining chunks.
+func (c *HTTPClient) CreateSession(ctx context.Context, filepath string, content []byte) (*SessionResponse, error) {
+	response := &SessionResponse{}
+	headers := map[string]string{
+		"Authorization":   "Bearer " + c.accessToken,
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": `{"close": false}`,
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload_session/start", headers, bytes.NewReader(content))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+	resp.Body.Close()
+	return response, nil
+}
+
+func (c *HTTPClient) UploadChunk(ctx context.Context, filepath, sessionId string, content []byte, offset uint) error {
+	cursor := map[string]interface{}{
+		"session_id": sessionId,
+		"offset":     offset,
+	}
+	arg := map[string]interface{}{
+		"cursor": cursor,
+		"close":  false,
+	}
+	argJSON, err := json.Marshal(arg)
+	if err != nil {
+		return fmt.Errorf("error marshalling headers: %w", err)
+	}
+
+	headers := map[string]string{
+		"Authorization":   "Bearer " + c.accessToken,
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": string(argJSON),
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload_session/append_v2", headers, bytes.NewReader(content))
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
+func (c *HTTPClient) CloseSession(ctx context.Context, filepath, sessionid string, offset uint) (*UploadFileResponse, error) {
+	cursor := map[string]interface{}{
+		"session_id": sessionid,
+		"offset":     offset,
+	}
+	commit := map[string]interface{}{
+		"path": filepath,
+		"mode": "overwrite",
+		"mute": false,
+	}
+	finishArg := map[string]interface{}{
+		"cursor": cursor,
+		"commit": commit,
+	}
+	argJSON, err := json.Marshal(finishArg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling headers: %w", err)
+	}
+
+	headers := map[string]string{
+		"Authorization":   "Bearer " + c.accessToken,
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": string(argJSON),
+	}
+	response := &UploadFileResponse{}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload_session/finish", headers, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+	resp.Body.Close()
+	return response, nil
+}
+
+func (c *HTTPClient) DeleteFile(ctx context.Context, filepath string) error {
+	req := struct {
+		Path string `json:"path"`
+	}{
+		Path: filepath,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("error marshalling request body: %w", err)
+	}
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + c.accessToken,
+		"Content-Type":  "application/json",
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/delete_v2", headers, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
 //nolint:unparam // method may be used for non-POST in future
 func (c *HTTPClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody io.Reader) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dropbox_test
+package destination_test
 
 import (
 	"context"
 	"testing"
 
-	dropbox "github.com/conduitio-labs/conduit-connector-dropbox"
+	"github.com/conduitio-labs/conduit-connector-dropbox/destination"
 	"github.com/matryer/is"
 )
 
 func TestTeardown_NoOpen(t *testing.T) {
 	is := is.New(t)
-	con := dropbox.NewDestination()
+	con := destination.NewDestination()
 	err := con.Teardown(context.Background())
 	is.NoErr(err)
 }

@@ -115,10 +115,6 @@ pipelines:
           # Type: string
           # Required: yes
           token: ""
-          # DestinationConfigParam must be either yes or no (defaults to yes).
-          # Type: string
-          # Required: no
-          destinationConfigParam: "yes"
           # Path of the Dropbox directory to read/write files. Empty path
           # implies root directory.
           # Type: string

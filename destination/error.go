@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate conn-sdk-cli specgen
-
-package dropbox
+package destination
 
 import (
-	_ "embed"
-
-	"github.com/conduitio-labs/conduit-connector-dropbox/destination"
-	"github.com/conduitio-labs/conduit-connector-dropbox/source"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"fmt"
 )
 
-//go:embed connector.yaml
-var specs string
+var ErrMissingUploadDirectory = fmt.Errorf("missing upload directory")
+var ErrMissingFilePath = fmt.Errorf("missing file path")
+var ErrInvalidHash = fmt.Errorf("missing or invalid content hash")
 
-var version = "(devel)"
+type InvalidChunkError struct {
+	message string
+}
 
-var Connector = sdk.Connector{
-	NewSpecification: sdk.YAMLSpecification(specs, version),
-	NewSource:        source.NewSource,
-	NewDestination:   destination.NewDestination,
+func (e InvalidChunkError) Error() string {
+	return fmt.Sprintf("invalid chunk: %s", e.message)
+}
+
+func NewInvalidChunkError(msg string) InvalidChunkError {
+	return InvalidChunkError{msg}
 }
