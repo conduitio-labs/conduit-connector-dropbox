@@ -44,6 +44,7 @@ type Worker struct {
 	wg                 *sync.WaitGroup
 }
 
+// NewWorker creates a new worker instance with the given configuration.
 func NewWorker(
 	client dropbox.Client,
 	path string,
@@ -68,6 +69,7 @@ func NewWorker(
 	}
 }
 
+// Start begins processing files and handles retries on errors.
 func (w *Worker) Start(ctx context.Context) {
 	defer w.wg.Done()
 	retries := w.retries
@@ -94,6 +96,7 @@ func (w *Worker) Start(ctx context.Context) {
 	}
 }
 
+// process handles the main workflow of checking and processing changes.
 func (w *Worker) process(ctx context.Context) error {
 	if w.position.getCursor() == "" {
 		return w.initialSync(ctx)
@@ -124,6 +127,24 @@ func (w *Worker) process(ctx context.Context) error {
 	return w.handlePagination(ctx, hasMore)
 }
 
+// initialSync performs the first complete sync of the target path.
+func (w *Worker) initialSync(ctx context.Context) error {
+	entries, cursor, hasMore, err := w.client.List(ctx, w.path, false)
+	if err != nil {
+		return fmt.Errorf("list failed: %w", err)
+	}
+	w.position.updateCursor(cursor)
+
+	for _, entry := range entries {
+		if err := w.processFile(ctx, entry); err != nil {
+			return fmt.Errorf("process file failed: %w", err)
+		}
+	}
+
+	return w.handlePagination(ctx, hasMore)
+}
+
+// reSync performs a full resync when the cursor expires.
 func (w *Worker) reSync(ctx context.Context) error {
 	entries, cursor, hasMore, err := w.client.List(ctx, w.path, false)
 	if err != nil {
@@ -144,22 +165,7 @@ func (w *Worker) reSync(ctx context.Context) error {
 	return w.handlePagination(ctx, hasMore)
 }
 
-func (w *Worker) initialSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.path, false)
-	if err != nil {
-		return fmt.Errorf("list failed: %w", err)
-	}
-	w.position.updateCursor(cursor)
-
-	for _, entry := range entries {
-		if err := w.processFile(ctx, entry); err != nil {
-			return fmt.Errorf("process file failed: %w", err)
-		}
-	}
-
-	return w.handlePagination(ctx, hasMore)
-}
-
+// handlePagination manages continuation of large result sets.
 func (w *Worker) handlePagination(ctx context.Context, hasMore bool) error {
 	var entries []dropbox.Entry
 	var cursor string
@@ -182,6 +188,7 @@ func (w *Worker) handlePagination(ctx context.Context, hasMore bool) error {
 	return nil
 }
 
+// processFile routes file processing based on entry type.
 func (w *Worker) processFile(ctx context.Context, entry dropbox.Entry) error {
 	if entry.Tag == tagFolder {
 		return nil
@@ -197,6 +204,7 @@ func (w *Worker) processFile(ctx context.Context, entry dropbox.Entry) error {
 	return w.processFullFile(ctx, entry)
 }
 
+// processDeletedFile handles deletion records.
 func (w *Worker) processDeletedFile(ctx context.Context, entry dropbox.Entry) error {
 	w.position.updateChunkInfo(nil)
 	position, err := w.position.marshal()
@@ -224,6 +232,7 @@ func (w *Worker) processDeletedFile(ctx context.Context, entry dropbox.Entry) er
 	}
 }
 
+// processChunkedFile processes large files in chunks.
 func (w *Worker) processChunkedFile(ctx context.Context, entry dropbox.Entry) error {
 	totalChunks := (entry.Size + w.fileChunkSizeBytes - 1) / w.fileChunkSizeBytes
 
@@ -257,6 +266,7 @@ func (w *Worker) processChunkedFile(ctx context.Context, entry dropbox.Entry) er
 	return nil
 }
 
+// processFullFile processes small files in one operation.
 func (w *Worker) processFullFile(ctx context.Context, entry dropbox.Entry) error {
 	fileData, err := w.downloadChunk(ctx, entry.PathDisplay, 0, entry.Size)
 	if err != nil {
@@ -276,6 +286,7 @@ func (w *Worker) processFullFile(ctx context.Context, entry dropbox.Entry) error
 	}
 }
 
+// downloadChunk downloads a specific byte range of a file.
 func (w *Worker) downloadChunk(ctx context.Context, path string, start, length uint64) ([]byte, error) {
 	reader, err := w.client.DownloadRange(ctx, path, start, length)
 	if err != nil {
@@ -291,6 +302,7 @@ func (w *Worker) downloadChunk(ctx context.Context, path string, start, length u
 	return data, nil
 }
 
+// createChunkedRecord creates a record for a file chunk.
 func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks uint64, data []byte) (opencdc.Record, error) {
 	if chunkIdx == totalChunks {
 		w.position.updateChunkInfo(nil)
@@ -328,6 +340,7 @@ func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks 
 	), nil
 }
 
+// createRecord creates a record for a complete file.
 func (w *Worker) createRecord(entry dropbox.Entry, data []byte) (opencdc.Record, error) {
 	w.position.updateChunkInfo(nil)
 	w.position.updateLastProcessedTime(entry.ServerModified.Unix())
@@ -353,6 +366,7 @@ func (w *Worker) createRecord(entry dropbox.Entry, data []byte) (opencdc.Record,
 	), nil
 }
 
+// handleCursorError handles cursor reset/expiry error.
 func (w *Worker) handleCursorError(ctx context.Context, op string, err error) error {
 	if errors.Is(err, dropbox.ErrExpiredCursor) {
 		sdk.Logger(ctx).Warn().Msgf("cursor expired during %s, falling back to re-sync", op)
