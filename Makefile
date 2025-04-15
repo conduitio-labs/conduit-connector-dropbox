@@ -6,7 +6,7 @@ build:
 
 .PHONY: test
 test:
-	go test $(GOTEST_FLAGS) -race ./... -v
+	go test $(GOTEST_FLAGS) -race ./...
 
 .PHONY: generate
 generate:
