@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	config "github.com/conduitio-labs/conduit-connector-dropbox/config"
 	"github.com/matryer/is"
 )
 
@@ -25,5 +26,25 @@ func TestTeardownSource_NoOpen(t *testing.T) {
 	is := is.New(t)
 	con := NewSource()
 	err := con.Teardown(context.Background())
+	is.NoErr(err)
+}
+
+func TestSource_Open(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	con := &Source{}
+	defer func() {
+		err := con.Teardown(ctx)
+		is.NoErr(err)
+	}()
+
+	con.config = Config{
+		Config: config.Config{
+			Token: "test-token",
+		},
+	}
+
+	err := con.Open(ctx, nil)
 	is.NoErr(err)
 }
