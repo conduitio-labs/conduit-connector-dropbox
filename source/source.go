@@ -72,9 +72,11 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 		return fmt.Errorf("error parsing sdk position: %w", err)
 	}
 
-	s.client, err = dropbox.NewHTTPClient(s.config.Token, s.config.LongpollTimeout)
-	if err != nil {
-		return fmt.Errorf("error creating http client for dropbox: %w", err)
+	if s.client == nil {
+		s.client, err = dropbox.NewHTTPClient(s.config.Token, s.config.LongpollTimeout)
+		if err != nil {
+			return fmt.Errorf("error creating http client for dropbox: %w", err)
+		}
 	}
 
 	s.ch = make(chan opencdc.Record, 1)
@@ -101,18 +103,25 @@ func (s *Source) ReadN(ctx context.Context, n int) ([]opencdc.Record, error) {
 	}
 
 	records := make([]opencdc.Record, 0, n)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r, ok := <-s.ch:
+		if !ok {
+			return nil, ErrReadingData
+		}
+		records = append(records, r)
+	}
+
 	for len(records) < n {
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case record, ok := <-s.ch:
+		case r, ok := <-s.ch:
 			if !ok {
-				if len(records) == 0 {
-					return nil, ErrReadingData
-				}
-				return records, nil
+				break
 			}
-			records = append(records, record)
+			records = append(records, r)
+		default:
+			return records, nil
 		}
 	}
 

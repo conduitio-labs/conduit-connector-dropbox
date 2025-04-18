@@ -7,8 +7,17 @@ Source and destination connector for Dropbox.<!-- /readmegen:description -->
 
 ## Source
 
-A source connector pulls data from an external resource and pushes it to
-downstream resources via Conduit.
+The Dropbox Source Connector reads files from a specified Dropbox path and converts them into `opencdc.Record` that can be processed by Conduit. Files larger than `fileChunkSizeBytes` (maximum value 4MB) are split into smaller chunks, and each chunk is emitted as a separate record.
+
+Each record have following metadata fields to support downstream file reassembly:
+
+* `filename`: Filename of the file with extension.
+* `file_id`: Unique Dropbox file ID.
+* `file_path`: Full path of the file in Dropbox.
+* `file_size`: Integer size of the file.
+* `chunk_index`: Index of the current chunk (starting from 1) – only present for chunks.
+* `total_chunks`: Total number of chunks – only present for chunked files.
+* `hash`: A hash of the file content. This field can be used to verify data integrity.
 
 ### Configuration
 
