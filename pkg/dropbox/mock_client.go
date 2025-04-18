@@ -19,16 +19,31 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 )
 
-var ErrFileNotFound = fmt.Errorf("file not found")
+var (
+	ErrFileNotFound    = fmt.Errorf("file not found")
+	ErrSessionNotFound = fmt.Errorf("session not found")
+	ErrInvalidOffset   = fmt.Errorf("invalid offset")
+)
 
 type MockClient struct {
-	Files        map[string][]byte
-	Entries      []Entry
-	Cursor       string
-	LongpollChan chan bool
+	files        map[string][]byte
+	entries      []Entry
+	cursor       string
+	longpollChan chan bool
+
+	// For tracking upload sessions
+	sessions   map[string]*mockSession
+	sessionsMu sync.Mutex
+}
+
+type mockSession struct {
+	sessionID string
+	content   []byte
+	offset    uint
 }
 
 func NewMockClient() *MockClient {
@@ -66,28 +81,29 @@ func NewMockClient() *MockClient {
 	}
 
 	return &MockClient{
-		Files:        files,
-		Entries:      entries,
-		Cursor:       "mock-cursor-1",
-		LongpollChan: make(chan bool, 1),
+		files:        files,
+		entries:      entries,
+		cursor:       "mock-cursor-1",
+		longpollChan: make(chan bool, 1),
+		sessions:     make(map[string]*mockSession),
 	}
 }
 
 func (m *MockClient) List(_ context.Context, _ string, _ bool) ([]Entry, string, bool, error) {
-	return m.Entries[:2], m.Cursor, true, nil
+	return m.entries[:2], m.cursor, true, nil
 }
 
 func (m *MockClient) ListContinue(_ context.Context, cursor string) ([]Entry, string, bool, error) {
-	if cursor != m.Cursor {
+	if cursor != m.cursor {
 		return nil, "", false, ErrExpiredCursor
 	}
 
-	return m.Entries[2:], m.Cursor, false, nil
+	return m.entries[2:], m.cursor, false, nil
 }
 
 func (m *MockClient) Longpoll(ctx context.Context, _ string, timeoutSec int) (bool, error) {
 	select {
-	case change := <-m.LongpollChan:
+	case change := <-m.longpollChan:
 		return change, nil
 	case <-time.After(time.Duration(timeoutSec) * time.Second):
 		return false, nil
@@ -97,7 +113,7 @@ func (m *MockClient) Longpoll(ctx context.Context, _ string, timeoutSec int) (bo
 }
 
 func (m *MockClient) DownloadRange(_ context.Context, path string, start, length uint64) (io.ReadCloser, error) {
-	content, ok := m.Files[path]
+	content, ok := m.files[path]
 	if !ok {
 		return nil, ErrFileNotFound
 	}
@@ -109,4 +125,84 @@ func (m *MockClient) DownloadRange(_ context.Context, path string, start, length
 	}
 
 	return io.NopCloser(strings.NewReader(string(content[start:end]))), nil
+}
+
+func (m *MockClient) UploadFile(_ context.Context, filepath string, content []byte) (*UploadFileResponse, error) {
+	m.files[filepath] = content
+
+	return &UploadFileResponse{
+		ID:          "id:" + filepath,
+		ContentHash: "mock-hash",
+		Name:        filepath[strings.LastIndex(filepath, "/")+1:],
+		PathDisplay: filepath,
+		Size:        uint64(len(content)),
+	}, nil
+}
+
+func (m *MockClient) CreateSession(_ context.Context, content []byte) (*SessionResponse, error) {
+	m.sessionsMu.Lock()
+	defer m.sessionsMu.Unlock()
+
+	sessionID := fmt.Sprintf("mock-session-%d", len(m.sessions)+1)
+	m.sessions[sessionID] = &mockSession{
+		sessionID: sessionID,
+		content:   content,
+		offset:    uint(len(content)),
+	}
+
+	return &SessionResponse{
+		SessionID: sessionID,
+	}, nil
+}
+
+func (m *MockClient) UploadChunk(_ context.Context, sessionID string, content []byte, offset uint) error {
+	m.sessionsMu.Lock()
+	defer m.sessionsMu.Unlock()
+
+	session, ok := m.sessions[sessionID]
+	if !ok {
+		return ErrSessionNotFound
+	}
+
+	if offset != session.offset {
+		return ErrInvalidOffset
+	}
+
+	session.content = append(session.content, content...)
+	session.offset += uint(len(content))
+	return nil
+}
+
+func (m *MockClient) CloseSession(_ context.Context, filepath, sessionID string, offset uint) (*UploadFileResponse, error) {
+	m.sessionsMu.Lock()
+	defer m.sessionsMu.Unlock()
+
+	session, ok := m.sessions[sessionID]
+	if !ok {
+		return nil, ErrSessionNotFound
+	}
+
+	if offset != session.offset {
+		return nil, ErrInvalidOffset
+	}
+
+	m.files[filepath] = session.content
+	delete(m.sessions, sessionID)
+
+	return &UploadFileResponse{
+		ID:          "id:" + filepath,
+		ContentHash: "chunked-hash",
+		Name:        filepath[strings.LastIndex(filepath, "/")+1:],
+		PathDisplay: filepath,
+		Size:        uint64(len(session.content)),
+	}, nil
+}
+
+func (m *MockClient) DeleteFile(_ context.Context, filepath string) error {
+	if _, ok := m.files[filepath]; !ok {
+		return ErrFileNotFound
+	}
+	delete(m.files, filepath)
+
+	return nil
 }

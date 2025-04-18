@@ -12,19 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package destination_test
+package destination
 
 import (
 	"context"
 	"testing"
 
-	"github.com/conduitio-labs/conduit-connector-dropbox/destination"
+	"github.com/conduitio-labs/conduit-connector-dropbox/config"
 	"github.com/matryer/is"
 )
 
 func TestTeardown_NoOpen(t *testing.T) {
 	is := is.New(t)
-	con := destination.NewDestination()
+	con := NewDestination()
 	err := con.Teardown(context.Background())
+	is.NoErr(err)
+}
+
+func TestDestination_Open(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	con := &Destination{}
+
+	con.config = Config{
+		Config: config.Config{
+			Token: "test-token",
+		},
+	}
+
+	err := con.Open(ctx)
+	is.NoErr(err)
+
+	err = con.Teardown(ctx)
 	is.NoErr(err)
 }

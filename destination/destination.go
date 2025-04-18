@@ -45,9 +45,12 @@ func (d *Destination) Config() sdk.DestinationConfig {
 func (d *Destination) Open(ctx context.Context) error {
 	sdk.Logger(ctx).Info().Msg("Opening Dropbox destination")
 	var err error
-	d.client, err = dropbox.NewHTTPClient(d.config.Token, 0)
-	if err != nil {
-		return fmt.Errorf("error creating dropbox client: %w", err)
+
+	if d.client == nil {
+		d.client, err = dropbox.NewHTTPClient(d.config.Token, 0)
+		if err != nil {
+			return fmt.Errorf("error creating dropbox client: %w", err)
+		}
 	}
 	d.session = NewSession()
 	return nil
@@ -55,8 +58,9 @@ func (d *Destination) Open(ctx context.Context) error {
 
 func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int, error) {
 	for i, record := range records {
-		switch {
-		case record.Operation == opencdc.OperationDelete:
+		//nolint:exhaustive // default handles all non-delete operations
+		switch record.Operation {
+		case opencdc.OperationDelete:
 			filepath, ok := record.Metadata["file_path"]
 			if !ok {
 				return i, ErrMissingFilePath
