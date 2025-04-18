@@ -12,24 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate conn-sdk-cli specgen
+package config
 
-package dropbox
-
-import (
-	_ "embed"
-
-	"github.com/conduitio-labs/conduit-connector-dropbox/source"
-	sdk "github.com/conduitio/conduit-connector-sdk"
-)
-
-//go:embed connector.yaml
-var specs string
-
-var version = "(devel)"
-
-var Connector = sdk.Connector{
-	NewSpecification: sdk.YAMLSpecification(specs, version),
-	NewSource:        source.NewSource,
-	NewDestination:   NewDestination,
+// Config contains shared config parameters, common to the source and
+// destination.
+type Config struct {
+	// Token is used to authenticate API access.
+	Token string `json:"token" validate:"required"`
+	// Path of the Dropbox directory to read/write files. Empty path implies root directory.
+	Path string `json:"path"`
 }

@@ -12,24 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate conn-sdk-cli specgen
-
 package dropbox
 
-import (
-	_ "embed"
+import "time"
 
-	"github.com/conduitio-labs/conduit-connector-dropbox/source"
-	sdk "github.com/conduitio/conduit-connector-sdk"
-)
-
-//go:embed connector.yaml
-var specs string
-
-var version = "(devel)"
-
-var Connector = sdk.Connector{
-	NewSpecification: sdk.YAMLSpecification(specs, version),
-	NewSource:        source.NewSource,
-	NewDestination:   NewDestination,
+type Entry struct {
+	Tag            string    `json:".tag"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	PathDisplay    string    `json:"path_display"`
+	ServerModified time.Time `json:"server_modified"`
+	Size           uint64    `json:"size,omitempty"`
+	ContentHash    string    `json:"content_hash,omitempty"`
 }

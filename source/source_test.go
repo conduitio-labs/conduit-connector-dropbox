@@ -12,11 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dropbox
+package source
 
-// Config contains shared config parameters, common to the source and
-// destination.
-type Config struct {
-	// Token is used to authenticate API access.
-	Token string `json:"token" validate:"required"`
+import (
+	"context"
+	"testing"
+
+	config "github.com/conduitio-labs/conduit-connector-dropbox/config"
+	"github.com/matryer/is"
+)
+
+func TestTeardownSource_NoOpen(t *testing.T) {
+	is := is.New(t)
+	con := NewSource()
+	err := con.Teardown(context.Background())
+	is.NoErr(err)
+}
+
+func TestSource_Open(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	con := &Source{}
+	defer func() {
+		err := con.Teardown(ctx)
+		is.NoErr(err)
+	}()
+
+	con.config = Config{
+		Config: config.Config{
+			Token: "test-token",
+		},
+	}
+
+	err := con.Open(ctx, nil)
+	is.NoErr(err)
 }

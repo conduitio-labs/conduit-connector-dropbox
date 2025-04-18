@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dropbox_test
+package dropbox
 
 import (
 	"context"
-	"testing"
-
-	dropbox "github.com/conduitio-labs/conduit-connector-dropbox"
-	"github.com/matryer/is"
+	"io"
 )
 
-func TestTeardownSource_NoOpen(t *testing.T) {
-	is := is.New(t)
-	con := dropbox.NewSource()
-	err := con.Teardown(context.Background())
-	is.NoErr(err)
+type Client interface {
+	List(ctx context.Context, path string, recursive bool) ([]Entry, string, bool, error)
+	ListContinue(ctx context.Context, cursor string) ([]Entry, string, bool, error)
+	Longpoll(ctx context.Context, cursor string, timeoutSec int) (bool, error)
+	DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error)
 }
