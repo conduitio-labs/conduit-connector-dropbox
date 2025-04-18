@@ -25,70 +25,64 @@ import (
 var ErrFileNotFound = fmt.Errorf("file not found")
 
 type MockClient struct {
-	Files        map[string][]byte
-	Entries      []Entry
-	Cursor       string
-	LongpollChan chan bool
+	files   map[string][]byte
+	entries []Entry
+	cursor  string
 }
 
 func NewMockClient() *MockClient {
-	files := map[string][]byte{
+	mock := &MockClient{
+		cursor: "mock-cursor-1",
+	}
+
+	mock.SetFiles(map[string][]byte{
 		"/docs/file1.txt": []byte("Hello from Dropbox mock - file1"),
 		"/docs/file2.txt": []byte("Another test file from Dropbox mock - file2"),
 		"/docs/file3.txt": []byte("Another test file from Dropbox mock - file3"),
-	}
+	})
 
-	entries := []Entry{
-		{
-			Tag:            "file",
-			ID:             "id:file1",
-			Name:           "file1.txt",
-			PathDisplay:    "/docs/file1.txt",
-			ServerModified: time.Now().Add(-2 * time.Hour),
-			Size:           uint64(len(files["/docs/file1.txt"])),
-		},
-		{
-			Tag:            "file",
-			ID:             "id:file2",
-			Name:           "file2.txt",
-			PathDisplay:    "/docs/file2.txt",
-			ServerModified: time.Now().Add(-1 * time.Hour),
-			Size:           uint64(len(files["/docs/file2.txt"])),
-		},
-		{
-			Tag:            "file",
-			ID:             "id:file3",
-			Name:           "file3.txt",
-			PathDisplay:    "/docs/file3.txt",
-			ServerModified: time.Now().Add(-1 * time.Hour),
-			Size:           uint64(len(files["/docs/file3.txt"])),
-		},
-	}
+	return mock
+}
 
-	return &MockClient{
-		Files:        files,
-		Entries:      entries,
-		Cursor:       "mock-cursor-1",
-		LongpollChan: make(chan bool, 1),
+// SetFiles sets the mock files and automatically creates corresponding entries.
+func (m *MockClient) SetFiles(files map[string][]byte) {
+	m.files = files
+
+	m.entries = make([]Entry, 0, len(files))
+	for path, content := range files {
+		m.entries = append(m.entries, Entry{
+			Tag:            "file",
+			ID:             "id:" + path,
+			Name:           path[strings.LastIndex(path, "/")+1:],
+			PathDisplay:    path,
+			ServerModified: time.Now(),
+			Size:           uint64(len(content)),
+		})
 	}
 }
 
 func (m *MockClient) List(_ context.Context, _ string, _ bool) ([]Entry, string, bool, error) {
-	return m.Entries[:2], m.Cursor, true, nil
+	if len(m.entries) <= 1 {
+		return m.entries, m.cursor, false, nil
+	}
+
+	return m.entries[:1], m.cursor, true, nil
 }
 
 func (m *MockClient) ListContinue(_ context.Context, cursor string) ([]Entry, string, bool, error) {
-	if cursor != m.Cursor {
+	if cursor != m.cursor {
 		return nil, "", false, ErrExpiredCursor
 	}
 
-	return m.Entries[2:], m.Cursor, false, nil
+	if len(m.entries) <= 1 {
+		return nil, m.cursor, false, nil
+	}
+
+	return m.entries[1:], m.cursor, false, nil
 }
 
 func (m *MockClient) Longpoll(ctx context.Context, _ string, timeoutSec int) (bool, error) {
 	select {
-	case change := <-m.LongpollChan:
-		return change, nil
 	case <-time.After(time.Duration(timeoutSec) * time.Second):
 		return false, nil
 	case <-ctx.Done():
@@ -97,7 +91,7 @@ func (m *MockClient) Longpoll(ctx context.Context, _ string, timeoutSec int) (bo
 }
 
 func (m *MockClient) DownloadRange(_ context.Context, path string, start, length uint64) (io.ReadCloser, error) {
-	content, ok := m.Files[path]
+	content, ok := m.files[path]
 	if !ok {
 		return nil, ErrFileNotFound
 	}

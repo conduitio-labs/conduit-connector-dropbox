@@ -16,75 +16,119 @@ package source
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
-	config "github.com/conduitio-labs/conduit-connector-dropbox/config"
+	"github.com/conduitio-labs/conduit-connector-dropbox/config"
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
 	"github.com/conduitio/conduit-commons/opencdc"
 	"github.com/matryer/is"
 )
 
-func TestSource_Read_success(t *testing.T) {
-	is := is.New(t)
-	ctx := context.Background()
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(ctx)
+func TestSource_Read(t *testing.T) {
+	t.Run("successful read operations", func(t *testing.T) {
+		is := is.New(t)
+		ctx, cancel := context.WithCancel(context.Background())
 
-	source := &Source{}
-	defer func() {
-		err := source.Teardown(ctx)
-		is.NoErr(err)
-	}()
+		mockClient := dropbox.NewMockClient()
+		src := &Source{
+			client: mockClient,
+			config: Config{
+				Config: config.Config{
+					Token: "test-token",
+				},
+				FileChunkSizeBytes: 1024,
+			},
+		}
+		defer func() {
+			err := src.Teardown(ctx)
+			is.NoErr(err)
+		}()
 
-	source.config = Config{
-		Config: config.Config{
-			Token: "test-token",
-		},
-		FileChunkSizeBytes: 3145728,
-	}
-	source.client = dropbox.NewMockClient()
-
-	err := source.Open(ctx, nil)
-	is.NoErr(err)
-
-	var allRecords []opencdc.Record
-	for len(allRecords) < 3 {
-		records, err := source.ReadN(ctx, 3-len(allRecords))
+		err := src.Open(ctx, nil)
 		is.NoErr(err)
 
-		allRecords = append(allRecords, records...)
-	}
+		var allRecords []opencdc.Record
+		for len(allRecords) < 3 {
+			records, err := src.ReadN(ctx, 3-len(allRecords))
+			is.NoErr(err)
+			allRecords = append(allRecords, records...)
+		}
 
-	is.Equal(len(allRecords), 3)
+		is.Equal(len(allRecords), 3)
 
-	cancel()
-}
+		for _, record := range allRecords {
+			is.True(len(record.Payload.After.Bytes()) > 0)
+			is.True(record.Metadata["file_path"] != "")
+		}
+		cancel()
+	})
 
-func TestSource_Read_failed_context_canceled(t *testing.T) {
-	is := is.New(t)
-	ctx := context.Background()
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(ctx)
+	t.Run("context cancellation", func(t *testing.T) {
+		is := is.New(t)
+		ctx, cancel := context.WithCancel(context.Background())
 
-	source := &Source{}
-	defer func() {
-		err := source.Teardown(ctx)
+		src := &Source{
+			client: dropbox.NewMockClient(),
+			config: Config{
+				Config: config.Config{
+					Token: "test-token",
+				},
+				FileChunkSizeBytes: 1024,
+			},
+		}
+		defer func() {
+			err := src.Teardown(ctx)
+			is.NoErr(err)
+		}()
+
+		err := src.Open(ctx, nil)
 		is.NoErr(err)
-	}()
 
-	source.config = Config{
-		Config: config.Config{
-			Token: "test-token",
-		},
-		FileChunkSizeBytes: 3145728,
-	}
-	source.client = dropbox.NewMockClient()
+		cancel()
+		_, err = src.ReadN(ctx, 1)
+		is.Equal(err, ctx.Err())
+	})
 
-	err := source.Open(ctx, nil)
-	is.NoErr(err)
+	t.Run("chunked file processing", func(t *testing.T) {
+		is := is.New(t)
+		ctx, cancel := context.WithCancel(context.Background())
 
-	cancel()
-	records, err := source.ReadN(ctx, 2)
-	is.Equal(err, ctx.Err())
-	is.Equal(records, nil)
+		mockClient := dropbox.NewMockClient()
+		largeFileContent := make([]byte, 5000) // 5KB file
+		mockClient.SetFiles(map[string][]byte{"/docs/large.txt": largeFileContent})
+
+		src := &Source{
+			client: mockClient,
+			config: Config{
+				Config: config.Config{
+					Token: "test-token",
+				},
+				FileChunkSizeBytes: 1000,
+			},
+		}
+		defer func() {
+			err := src.Teardown(ctx)
+			is.NoErr(err)
+		}()
+
+		err := src.Open(ctx, nil)
+		is.NoErr(err)
+
+		// Should get 5 chunks (5KB file / 1KB chunks)
+		var chunks []opencdc.Record
+		for len(chunks) < 5 {
+			records, err := src.ReadN(ctx, 5-len(chunks))
+			is.NoErr(err)
+			chunks = append(chunks, records...)
+		}
+
+		is.Equal(len(chunks), 5)
+		for i, chunk := range chunks {
+			is.Equal(chunk.Metadata["is_chunked"], "true")
+			is.Equal(chunk.Metadata["chunk_index"], fmt.Sprintf("%d", i+1))
+			is.Equal(chunk.Metadata["total_chunks"], "5")
+		}
+		cancel()
+	})
 }
