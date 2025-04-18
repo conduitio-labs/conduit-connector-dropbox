@@ -86,12 +86,14 @@ func (w *Worker) Start(ctx context.Context) {
 
 // process handles the main workflow of checking and processing changes.
 func (w *Worker) process(ctx context.Context) error {
-	if w.position.getCursor() == "" {
+	cursor := w.position.getCursor()
+
+	if cursor == "" {
 		return w.initialSync(ctx)
 	}
 
 	// Using longpoll for change detection
-	hasChanges, err := w.client.Longpoll(ctx, w.position.getCursor(), w.config.LongpollTimeout)
+	hasChanges, err := w.client.Longpoll(ctx, cursor, w.config.LongpollTimeout)
 	if err != nil {
 		return w.handleCursorError(ctx, "longpoll", err)
 	}
@@ -100,7 +102,7 @@ func (w *Worker) process(ctx context.Context) error {
 		return nil
 	}
 
-	entries, cursor, hasMore, err := w.client.ListContinue(ctx, w.position.getCursor())
+	entries, cursor, hasMore, err := w.client.ListContinue(ctx, cursor)
 	if err != nil {
 		return w.handleCursorError(ctx, "list continue", err)
 	}
@@ -142,7 +144,7 @@ func (w *Worker) reSync(ctx context.Context) error {
 
 	for _, entry := range entries {
 		// Skip already processed files.
-		if entry.ServerModified.Unix() < w.position.getLastProcessedTime() {
+		if entry.ServerModified.UnixNano() < w.position.getLastProcessedTime() {
 			continue
 		}
 		if err := w.processFile(ctx, entry); err != nil {
@@ -294,7 +296,7 @@ func (w *Worker) downloadChunk(ctx context.Context, path string, start, length u
 func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks uint64, data []byte) (opencdc.Record, error) {
 	if chunkIdx == totalChunks {
 		w.position.updateChunkInfo(nil)
-		w.position.updateLastProcessedTime(entry.ServerModified.Unix())
+		w.position.updateLastProcessedTime(entry.ServerModified.UnixNano())
 	} else {
 		w.position.updateChunkInfo(&ChunkInfo{
 			FileID:      entry.ID,
@@ -331,7 +333,7 @@ func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks 
 // createRecord creates a record for a complete file.
 func (w *Worker) createRecord(entry dropbox.Entry, data []byte) (opencdc.Record, error) {
 	w.position.updateChunkInfo(nil)
-	w.position.updateLastProcessedTime(entry.ServerModified.Unix())
+	w.position.updateLastProcessedTime(entry.ServerModified.UnixNano())
 
 	position, err := w.position.marshal()
 	if err != nil {

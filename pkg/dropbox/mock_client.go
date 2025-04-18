@@ -30,10 +30,9 @@ var (
 )
 
 type MockClient struct {
-	files        map[string][]byte
-	entries      []Entry
-	cursor       string
-	longpollChan chan bool
+	files   map[string][]byte
+	entries []Entry
+	cursor  string
 
 	// For tracking upload sessions
 	sessions   map[string]*mockSession
@@ -47,50 +46,43 @@ type mockSession struct {
 }
 
 func NewMockClient() *MockClient {
-	files := map[string][]byte{
+	mock := &MockClient{
+		cursor:   "mock-cursor-1",
+		sessions: make(map[string]*mockSession),
+	}
+
+	mock.SetFiles(map[string][]byte{
 		"/docs/file1.txt": []byte("Hello from Dropbox mock - file1"),
 		"/docs/file2.txt": []byte("Another test file from Dropbox mock - file2"),
 		"/docs/file3.txt": []byte("Another test file from Dropbox mock - file3"),
-	}
+	})
 
-	entries := []Entry{
-		{
-			Tag:            "file",
-			ID:             "id:file1",
-			Name:           "file1.txt",
-			PathDisplay:    "/docs/file1.txt",
-			ServerModified: time.Now().Add(-2 * time.Hour),
-			Size:           uint64(len(files["/docs/file1.txt"])),
-		},
-		{
-			Tag:            "file",
-			ID:             "id:file2",
-			Name:           "file2.txt",
-			PathDisplay:    "/docs/file2.txt",
-			ServerModified: time.Now().Add(-1 * time.Hour),
-			Size:           uint64(len(files["/docs/file2.txt"])),
-		},
-		{
-			Tag:            "file",
-			ID:             "id:file3",
-			Name:           "file3.txt",
-			PathDisplay:    "/docs/file3.txt",
-			ServerModified: time.Now().Add(-1 * time.Hour),
-			Size:           uint64(len(files["/docs/file3.txt"])),
-		},
-	}
+	return mock
+}
 
-	return &MockClient{
-		files:        files,
-		entries:      entries,
-		cursor:       "mock-cursor-1",
-		longpollChan: make(chan bool, 1),
-		sessions:     make(map[string]*mockSession),
+// SetFiles sets the mock files and automatically creates corresponding entries.
+func (m *MockClient) SetFiles(files map[string][]byte) {
+	m.files = files
+
+	m.entries = make([]Entry, 0, len(files))
+	for path, content := range files {
+		m.entries = append(m.entries, Entry{
+			Tag:            "file",
+			ID:             "id:" + path,
+			Name:           path[strings.LastIndex(path, "/")+1:],
+			PathDisplay:    path,
+			ServerModified: time.Now(),
+			Size:           uint64(len(content)),
+		})
 	}
 }
 
 func (m *MockClient) List(_ context.Context, _ string, _ bool) ([]Entry, string, bool, error) {
-	return m.entries[:2], m.cursor, true, nil
+	if len(m.entries) <= 1 {
+		return m.entries, m.cursor, false, nil
+	}
+
+	return m.entries[:1], m.cursor, true, nil
 }
 
 func (m *MockClient) ListContinue(_ context.Context, cursor string) ([]Entry, string, bool, error) {
@@ -98,13 +90,15 @@ func (m *MockClient) ListContinue(_ context.Context, cursor string) ([]Entry, st
 		return nil, "", false, ErrExpiredCursor
 	}
 
-	return m.entries[2:], m.cursor, false, nil
+	if len(m.entries) <= 1 {
+		return nil, m.cursor, false, nil
+	}
+
+	return m.entries[1:], m.cursor, false, nil
 }
 
 func (m *MockClient) Longpoll(ctx context.Context, _ string, timeoutSec int) (bool, error) {
 	select {
-	case change := <-m.longpollChan:
-		return change, nil
 	case <-time.After(time.Duration(timeoutSec) * time.Second):
 		return false, nil
 	case <-ctx.Done():
