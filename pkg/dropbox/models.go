@@ -16,6 +16,9 @@ package dropbox
 
 import "time"
 
+// Entry represents metadata for files, folders, or deleted items in Dropbox.
+// Matches the structure returned by list_folder endpoint.
+// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder
 type Entry struct {
 	Tag            string    `json:".tag"`
 	ID             string    `json:"id"`

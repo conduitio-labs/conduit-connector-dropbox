@@ -33,27 +33,32 @@ const (
 )
 
 type Worker struct {
-	client    dropbox.Client
+	client    dropbox.FoldersClient
 	config    Config
-	position  *Position
 	recordsCh chan<- opencdc.Record
 	wg        *sync.WaitGroup
+
+	cursor            string
+	currentChunkInfo  *ChunkInfo
+	lastProcessedTime int64
 }
 
 // NewWorker creates a new worker instance with the given configuration.
 func NewWorker(
-	client dropbox.Client,
+	client dropbox.FoldersClient,
 	config Config,
 	position *Position,
 	recordsCh chan<- opencdc.Record,
 	wg *sync.WaitGroup,
 ) *Worker {
 	return &Worker{
-		client:    client,
-		config:    config,
-		position:  position,
-		recordsCh: recordsCh,
-		wg:        wg,
+		client:            client,
+		config:            config,
+		recordsCh:         recordsCh,
+		wg:                wg,
+		cursor:            position.Cursor,
+		currentChunkInfo:  position.ChunkInfo,
+		lastProcessedTime: position.LastProcessedUnixTime,
 	}
 }
 
@@ -63,11 +68,18 @@ func (w *Worker) Start(ctx context.Context) {
 	retries := w.config.Retries
 
 	for {
+		select {
+		case <-ctx.Done():
+			sdk.Logger(ctx).Debug().Msg("context canceled, worker shutting down...")
+			return
+		default:
+		}
+
 		err := w.process(ctx)
 		if err != nil {
 			select {
 			case <-ctx.Done():
-				sdk.Logger(ctx).Debug().Msg("worker shutting down...")
+				sdk.Logger(ctx).Debug().Msg("context canceled, worker shutting down...")
 				return
 			case <-time.After(w.config.RetryDelay):
 				if retries == 0 {
@@ -86,14 +98,12 @@ func (w *Worker) Start(ctx context.Context) {
 
 // process handles the main workflow of checking and processing changes.
 func (w *Worker) process(ctx context.Context) error {
-	cursor := w.position.getCursor()
-
-	if cursor == "" {
+	if w.cursor == "" {
 		return w.initialSync(ctx)
 	}
 
 	// Using longpoll for change detection
-	hasChanges, err := w.client.Longpoll(ctx, cursor, w.config.LongpollTimeout)
+	hasChanges, err := w.client.Longpoll(ctx, w.cursor, w.config.LongpollTimeout)
 	if err != nil {
 		return w.handleCursorError(ctx, "longpoll", err)
 	}
@@ -102,11 +112,11 @@ func (w *Worker) process(ctx context.Context) error {
 		return nil
 	}
 
-	entries, cursor, hasMore, err := w.client.ListContinue(ctx, cursor)
+	entries, cursor, hasMore, err := w.client.ListContinue(ctx, w.cursor)
 	if err != nil {
 		return w.handleCursorError(ctx, "list continue", err)
 	}
-	w.position.updateCursor(cursor)
+	w.cursor = cursor
 
 	for _, entry := range entries {
 		if err := w.processFile(ctx, entry); err != nil {
@@ -119,11 +129,11 @@ func (w *Worker) process(ctx context.Context) error {
 
 // initialSync performs the first complete sync of the target path.
 func (w *Worker) initialSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, w.config.Limit)
 	if err != nil {
 		return fmt.Errorf("list failed: %w", err)
 	}
-	w.position.updateCursor(cursor)
+	w.cursor = cursor
 
 	for _, entry := range entries {
 		if err := w.processFile(ctx, entry); err != nil {
@@ -136,15 +146,15 @@ func (w *Worker) initialSync(ctx context.Context) error {
 
 // reSync performs a full resync when the cursor expires.
 func (w *Worker) reSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, w.config.Limit)
 	if err != nil {
 		return fmt.Errorf("resync list failed: %w", err)
 	}
-	w.position.updateCursor(cursor)
+	w.cursor = cursor
 
 	for _, entry := range entries {
 		// Skip already processed files.
-		if entry.ServerModified.UnixNano() < w.position.getLastProcessedTime() {
+		if entry.ServerModified.UnixNano() < w.lastProcessedTime {
 			continue
 		}
 		if err := w.processFile(ctx, entry); err != nil {
@@ -162,11 +172,11 @@ func (w *Worker) handlePagination(ctx context.Context, hasMore bool) error {
 	var err error
 
 	for hasMore {
-		entries, cursor, hasMore, err = w.client.ListContinue(ctx, w.position.getCursor())
+		entries, cursor, hasMore, err = w.client.ListContinue(ctx, w.cursor)
 		if err != nil {
 			return w.handleCursorError(ctx, "list continue", err)
 		}
-		w.position.updateCursor(cursor)
+		w.cursor = cursor
 
 		for _, entry := range entries {
 			if err := w.processFile(ctx, entry); err != nil {
@@ -196,8 +206,8 @@ func (w *Worker) processFile(ctx context.Context, entry dropbox.Entry) error {
 
 // processDeletedFile handles deletion records.
 func (w *Worker) processDeletedFile(ctx context.Context, entry dropbox.Entry) error {
-	w.position.updateChunkInfo(nil)
-	position, err := w.position.marshal()
+	w.currentChunkInfo = nil
+	position, err := ToSDKPosition(w.cursor, nil, w.lastProcessedTime)
 	if err != nil {
 		return fmt.Errorf("marshal position: %w", err)
 	}
@@ -226,11 +236,9 @@ func (w *Worker) processDeletedFile(ctx context.Context, entry dropbox.Entry) er
 func (w *Worker) processChunkedFile(ctx context.Context, entry dropbox.Entry) error {
 	totalChunks := (entry.Size + w.config.FileChunkSizeBytes - 1) / w.config.FileChunkSizeBytes
 
-	chunkInfo := w.position.getChunkInfo()
-
 	var startChunk uint64 = 1
-	if chunkInfo != nil && chunkInfo.FileID == entry.ID {
-		startChunk = chunkInfo.ChunkIndex + 1
+	if w.currentChunkInfo != nil && w.currentChunkInfo.FileID == entry.ID {
+		startChunk = w.currentChunkInfo.ChunkIndex + 1
 	}
 
 	for chunkIdx := startChunk; chunkIdx <= totalChunks; chunkIdx++ {
@@ -294,19 +302,22 @@ func (w *Worker) downloadChunk(ctx context.Context, path string, start, length u
 
 // createChunkedRecord creates a record for a file chunk.
 func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks uint64, data []byte) (opencdc.Record, error) {
+	var chunkInfo *ChunkInfo
+
 	if chunkIdx == totalChunks {
-		w.position.updateChunkInfo(nil)
-		w.position.updateLastProcessedTime(entry.ServerModified.UnixNano())
+		w.currentChunkInfo = nil
+		w.lastProcessedTime = entry.ServerModified.UnixNano()
 	} else {
-		w.position.updateChunkInfo(&ChunkInfo{
+		chunkInfo = &ChunkInfo{
 			FileID:      entry.ID,
 			FilePath:    entry.PathDisplay,
 			ChunkIndex:  chunkIdx,
 			TotalChunks: totalChunks,
-		})
+		}
+		w.currentChunkInfo = chunkInfo
 	}
 
-	sdkPosition, err := w.position.marshal()
+	sdkPosition, err := ToSDKPosition(w.cursor, chunkInfo, w.lastProcessedTime)
 	if err != nil {
 		return opencdc.Record{}, fmt.Errorf("marshal position: %w", err)
 	}
@@ -332,10 +343,10 @@ func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks 
 
 // createRecord creates a record for a complete file.
 func (w *Worker) createRecord(entry dropbox.Entry, data []byte) (opencdc.Record, error) {
-	w.position.updateChunkInfo(nil)
-	w.position.updateLastProcessedTime(entry.ServerModified.UnixNano())
+	w.currentChunkInfo = nil
+	w.lastProcessedTime = entry.ServerModified.UnixNano()
 
-	position, err := w.position.marshal()
+	position, err := ToSDKPosition(w.cursor, nil, w.lastProcessedTime)
 	if err != nil {
 		return opencdc.Record{}, fmt.Errorf("marshal position: %w", err)
 	}

@@ -45,22 +45,24 @@ type HTTPClient struct {
 
 // NewHTTPClient creates a new Dropbox Client with the given access token and longpoll timeout.
 // It adds a 90-second buffer to account for Dropbox's jitter in longpoll requests.
-func NewHTTPClient(accessToken string, longpollTimeout int) (*HTTPClient, error) {
+// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-longpoll
+func NewHTTPClient(accessToken string, longpollTimeout time.Duration) (*HTTPClient, error) {
 	if accessToken == "" {
 		return nil, ErrEmptyAccessToken
 	}
 
 	return &HTTPClient{
 		accessToken: accessToken,
-		httpClient:  &http.Client{Timeout: time.Duration(longpollTimeout+90) * time.Second},
+		httpClient:  &http.Client{Timeout: longpollTimeout + 90*time.Second},
 	}, nil
 }
 
-func (c *HTTPClient) List(ctx context.Context, path string, recursive bool) ([]Entry, string, bool, error) {
+func (c *HTTPClient) List(ctx context.Context, path string, recursive bool, limit int) ([]Entry, string, bool, error) {
 	reqBody := struct {
 		Path      string `json:"path"`
 		Recursive bool   `json:"recursive"`
-	}{path, recursive}
+		Limit     int    `json:"limit"`
+	}{path, recursive, limit}
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -125,11 +127,11 @@ func (c *HTTPClient) ListContinue(ctx context.Context, cursor string) ([]Entry, 
 	return parsed.Entries, parsed.Cursor, parsed.HasMore, nil
 }
 
-func (c *HTTPClient) Longpoll(ctx context.Context, cursor string, timeoutSec int) (bool, error) {
+func (c *HTTPClient) Longpoll(ctx context.Context, cursor string, timeout time.Duration) (bool, error) {
 	reqBody := struct {
 		Cursor  string `json:"cursor"`
 		Timeout int    `json:"timeout"`
-	}{cursor, timeoutSec}
+	}{cursor, int(timeout.Seconds())}
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -189,6 +191,27 @@ func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, leng
 	}
 
 	return resp.Body, nil
+}
+
+func (c *HTTPClient) VerifyPath(ctx context.Context, path string) error {
+	reqBody := struct {
+		Path string `json:"path"`
+	}{path}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("marshal request failed: %w", err)
+	}
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + c.accessToken,
+		"Content-Type":  "application/json",
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/get_metadata", headers, bytes.NewReader(body))
+	resp.Body.Close()
+
+	return err
 }
 
 //nolint:unparam // method may be used for non-POST in future

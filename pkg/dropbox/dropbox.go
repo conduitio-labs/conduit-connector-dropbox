@@ -17,11 +17,27 @@ package dropbox
 import (
 	"context"
 	"io"
+	"time"
 )
 
-type Client interface {
-	List(ctx context.Context, path string, recursive bool) ([]Entry, string, bool, error)
+type FoldersClient interface {
+	// List returns metadata for all files/folders in path
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder
+	List(ctx context.Context, path string, recursive bool, limit int) ([]Entry, string, bool, error)
+
+	// ListContinue retrieves additional results from a previous List call
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue
 	ListContinue(ctx context.Context, cursor string) ([]Entry, string, bool, error)
-	Longpoll(ctx context.Context, cursor string, timeoutSec int) (bool, error)
+
+	// Longpoll checks for changes to folder contents (blocks until timeout or changes)
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-longpoll
+	Longpoll(ctx context.Context, cursor string, timeout time.Duration) (bool, error)
+
+	// DownloadRange retrieves specific bytes from a file (supports partial downloads)
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-download
 	DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error)
+
+	// VerifyPath validates if path exists and is accessible
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-get_metadata
+	VerifyPath(ctx context.Context, path string) error
 }

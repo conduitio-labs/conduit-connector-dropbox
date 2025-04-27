@@ -17,7 +17,6 @@ package source
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"github.com/conduitio/conduit-commons/opencdc"
 )
@@ -30,7 +29,6 @@ type ChunkInfo struct {
 }
 
 type Position struct {
-	mu                    sync.Mutex
 	Cursor                string     `json:"cursor"`
 	ChunkInfo             *ChunkInfo `json:"chunk_info"`
 	LastProcessedUnixTime int64      `json:"last_processed_unix_time"`
@@ -52,55 +50,16 @@ func ParseSDKPosition(position opencdc.Position) (*Position, error) {
 	return &pos, nil
 }
 
-func (p *Position) marshal() (opencdc.Position, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func ToSDKPosition(cursor string, chunkInfo *ChunkInfo, lastProcessed int64) (opencdc.Position, error) {
+	p := &Position{
+		Cursor:                cursor,
+		ChunkInfo:             chunkInfo,
+		LastProcessedUnixTime: lastProcessed,
+	}
 
 	positionBytes, err := json.Marshal(p)
 	if err != nil {
 		return nil, fmt.Errorf("marshal position: %w", err)
 	}
 	return positionBytes, nil
-}
-
-func (p *Position) updateChunkInfo(chunk *ChunkInfo) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.ChunkInfo = chunk
-}
-
-func (p *Position) updateCursor(cursor string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.Cursor = cursor
-}
-
-func (p *Position) updateLastProcessedTime(unixTime int64) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.LastProcessedUnixTime = unixTime
-}
-
-func (p *Position) getCursor() string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	return p.Cursor
-}
-
-func (p *Position) getChunkInfo() *ChunkInfo {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	return p.ChunkInfo
-}
-
-func (p *Position) getLastProcessedTime() int64 {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	return p.LastProcessedUnixTime
 }
