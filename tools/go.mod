@@ -6,6 +6,7 @@ tool (
 	github.com/conduitio/conduit-connector-sdk/conn-sdk-cli
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	mvdan.cc/gofumpt
+	github.com/vektra/mockery/v2
 )
 
 require (
