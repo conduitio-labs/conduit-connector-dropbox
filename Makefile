@@ -12,6 +12,7 @@ test:
 generate:
 	go generate ./...
 	conn-sdk-cli readmegen -w
+	mockery
 
 .PHONY: install-tools
 install-tools:

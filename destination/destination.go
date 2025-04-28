@@ -29,7 +29,7 @@ type Destination struct {
 	sdk.UnimplementedDestination
 
 	config Config
-	client dropbox.Client
+	client dropbox.FoldersClient
 	// sessions stores the active sessions for chunk uploads
 	session *Session
 }

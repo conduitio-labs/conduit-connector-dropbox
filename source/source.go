@@ -34,25 +34,27 @@ var (
 type Source struct {
 	sdk.UnimplementedSource
 
-	config   Config
-	position *Position
-	client   dropbox.Client
-	ch       chan opencdc.Record
-	wg       *sync.WaitGroup
+	config    Config
+	position  *Position
+	client    dropbox.FoldersClient
+	ch        chan opencdc.Record
+	workersWg *sync.WaitGroup
 }
 
 type Config struct {
 	sdk.DefaultSourceMiddleware
 	config.Config
 
-	// Timeout (in seconds) for Dropbox longpolling requests.
-	LongpollTimeout int `json:"longpollTimeout" default:"30"`
+	// Timeout for Dropbox longpolling requests.
+	LongpollTimeout time.Duration `json:"longpollTimeout" default:"30s"`
 	// Size of a file chunk in bytes to split large files, maximum is 4MB.
 	FileChunkSizeBytes uint64 `json:"fileChunkSizeBytes" default:"3145728"`
 	// Maximum number of retry attempts.
 	Retries int `json:"retries" default:"0"`
 	// Delay between retry attempts.
 	RetryDelay time.Duration `json:"retryDelay" default:"10s"`
+	// Maximum number of entries to fetch in a single list_folder request.
+	Limit int `json:"limit" default:"1000"`
 }
 
 func NewSource() sdk.Source {
@@ -79,18 +81,25 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 		}
 	}
 
-	s.ch = make(chan opencdc.Record, 1)
-	s.wg = &sync.WaitGroup{}
+	if s.config.Path != "" {
+		err = s.client.VerifyPath(ctx, s.config.Path)
+		if err != nil {
+			return fmt.Errorf("error verifying remote path: %w", err)
+		}
+	}
+
+	s.ch = make(chan opencdc.Record, 5)
+	s.workersWg = &sync.WaitGroup{}
 
 	// Start worker
-	s.wg.Add(1)
+	s.workersWg.Add(1)
 	go func() {
 		NewWorker(
 			s.client,
 			s.config,
 			s.position,
 			s.ch,
-			s.wg,
+			s.workersWg,
 		).Start(ctx)
 	}()
 
@@ -135,8 +144,8 @@ func (s *Source) Ack(ctx context.Context, position opencdc.Position) error {
 
 func (s *Source) Teardown(ctx context.Context) error {
 	sdk.Logger(ctx).Info().Msg("Tearing down Dropbox source")
-	if s.wg != nil {
-		s.wg.Wait()
+	if s.workersWg != nil {
+		s.workersWg.Wait()
 	}
 	if s.ch != nil {
 		close(s.ch)

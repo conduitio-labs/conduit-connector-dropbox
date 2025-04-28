@@ -1,0 +1,11 @@
+---
+with-expecter: true
+inpackage: true
+disable-version-string: true
+filename: "mock_{{.InterfaceName | snakecase}}.go"
+mockname: "Mock{{.InterfaceName}}"
+dir: "{{.InterfaceDir}}"
+packages:
+  github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox:
+    interfaces:
+      FoldersClient: {}
