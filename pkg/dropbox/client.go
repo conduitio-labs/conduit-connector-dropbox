@@ -30,12 +30,14 @@ var (
 	ErrEmptyAccessToken = errors.New("access token is required")
 	ErrExpiredCursor    = errors.New("dropbox: expired cursor")
 	ErrDropboxAPI       = errors.New("dropbox API error")
+	ErrNotAFolder       = errors.New("path must point to a directory, not a file")
 )
 
 const (
 	apiURL     = "https://api.dropboxapi.com/2"
 	contentURL = "https://content.dropboxapi.com/2"
 	notifyURL  = "https://notify.dropboxapi.com/2"
+	tagFolder  = "folder"
 )
 
 type HTTPClient struct {
@@ -193,14 +195,14 @@ func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, leng
 	return resp.Body, nil
 }
 
-func (c *HTTPClient) VerifyPath(ctx context.Context, path string) error {
+func (c *HTTPClient) VerifyPath(ctx context.Context, path string) (bool, error) {
 	reqBody := struct {
 		Path string `json:"path"`
 	}{path}
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("marshal request failed: %w", err)
+		return false, fmt.Errorf("marshal request failed: %w", err)
 	}
 
 	headers := map[string]string{
@@ -209,9 +211,24 @@ func (c *HTTPClient) VerifyPath(ctx context.Context, path string) error {
 	}
 
 	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/get_metadata", headers, bytes.NewReader(body))
-	resp.Body.Close()
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
 
-	return err
+	var parsed struct {
+		Tag string `json:".tag"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return false, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	if parsed.Tag != tagFolder {
+		return false, ErrNotAFolder
+	}
+
+	return true, nil
 }
 
 type UploadFileResponse struct {

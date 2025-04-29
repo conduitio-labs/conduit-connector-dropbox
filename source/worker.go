@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -213,8 +214,9 @@ func (w *Worker) processDeletedFile(ctx context.Context, entry dropbox.Entry) er
 	}
 
 	metadata := opencdc.Metadata{
-		"filename":  entry.Name,
-		"file_path": entry.PathDisplay,
+		"filename":                 entry.Name,
+		"file_path":                entry.PathDisplay,
+		opencdc.MetadataCollection: filepath.Dir(entry.PathDisplay),
 	}
 
 	record := sdk.Util.Source.NewRecordDelete(
@@ -323,14 +325,15 @@ func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks 
 	}
 
 	metadata := opencdc.Metadata{
-		"filename":     entry.Name,
-		"file_id":      entry.ID,
-		"file_path":    entry.PathDisplay,
-		"file_size":    fmt.Sprintf("%d", entry.Size),
-		"hash":         entry.ContentHash,
-		"chunk_index":  fmt.Sprintf("%d", chunkIdx),
-		"total_chunks": fmt.Sprintf("%d", totalChunks),
-		"is_chunked":   "true",
+		"filename":                 entry.Name,
+		"file_id":                  entry.ID,
+		"file_path":                entry.PathDisplay,
+		opencdc.MetadataCollection: filepath.Dir(entry.PathDisplay),
+		"file_size":                fmt.Sprintf("%d", entry.Size),
+		"hash":                     entry.ContentHash,
+		"chunk_index":              fmt.Sprintf("%d", chunkIdx),
+		"total_chunks":             fmt.Sprintf("%d", totalChunks),
+		"is_chunked":               "true",
 	}
 
 	return sdk.Util.Source.NewRecordCreate(
@@ -352,11 +355,12 @@ func (w *Worker) createRecord(entry dropbox.Entry, data []byte) (opencdc.Record,
 	}
 
 	metadata := opencdc.Metadata{
-		"filename":  entry.Name,
-		"file_id":   entry.ID,
-		"file_path": entry.PathDisplay,
-		"file_size": fmt.Sprintf("%d", entry.Size),
-		"hash":      entry.ContentHash,
+		"filename":                 entry.Name,
+		"file_id":                  entry.ID,
+		"file_path":                entry.PathDisplay,
+		opencdc.MetadataCollection: filepath.Dir(entry.PathDisplay),
+		"file_size":                fmt.Sprintf("%d", entry.Size),
+		"hash":                     entry.ContentHash,
 	}
 
 	return sdk.Util.Source.NewRecordCreate(

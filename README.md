@@ -28,7 +28,8 @@ Each record have following metadata fields to support downstream file reassembly
 
 * `filename`: Filename of the file with extension.
 * `file_id`: Unique Dropbox file ID.
-* `file_path`: Full path of the file in Dropbox.
+* `file_path`: Full path of the file in Dropbox (e.g., `/Photos/Vacation/image.jpg`).
+* `opencdc.MetadataCollection`: Path to the parent directory containing the file (e.g., `/Photos/Vacation`).
 * `file_size`: Integer size of the file.
 * `chunk_index`: Index of the current chunk (starting from 1) – only present for chunks.
 * `total_chunks`: Total number of chunks – only present for chunked files.

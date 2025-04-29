@@ -59,9 +59,9 @@ func (d *Destination) Open(ctx context.Context) error {
 func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int, error) {
 	for i, record := range records {
 		//nolint:exhaustive // default handles all non-delete operations
-		switch record.Operation {
-		case opencdc.OperationDelete:
-			filepath, ok := record.Metadata["file_path"]
+		switch {
+		case record.Operation == opencdc.OperationDelete:
+			filepath, ok := record.Metadata[opencdc.MetadataCollection]
 			if !ok {
 				return i, ErrMissingFilePath
 			}
@@ -70,16 +70,13 @@ func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int,
 				return i, fmt.Errorf("error deleting file: %w", err)
 			}
 
-		default:
-			chunked, ok := record.Metadata["is_chunked"]
-			if ok && chunked == "true" {
-				err := d.uploadChunkedRecord(ctx, record)
-				if err != nil {
-					return i, err
-				}
-				continue
+		case record.Metadata["is_chunked"] == "true":
+			err := d.uploadChunkedRecord(ctx, record)
+			if err != nil {
+				return i, err
 			}
 
+		default:
 			err := d.uploadFile(ctx, record)
 			if err != nil {
 				return i, err
@@ -96,13 +93,19 @@ func (d *Destination) Teardown(ctx context.Context) error {
 
 func (d *Destination) uploadFile(ctx context.Context, r opencdc.Record) error {
 	var filepath string
-	if d.config.Path == "" {
-		var ok bool
-		filepath, ok = r.Metadata["file_path"]
-		if !ok {
-			return ErrMissingUploadDirectory
-		}
-	}
+	// if d.config.Path == "" {
+	// 	path, ok := r.Metadata[opencdc.MetadataCollection]
+	// 	if !ok {
+	// 		return ErrMissingUploadDirectory
+	// 	}
+
+
+
+	// } else {
+	// 	filename, ok := r.Metadata["filename"]
+
+	// 	filepath = d.config.Path + "/" //filename 
+	// }
 
 	response, err := d.client.UploadFile(ctx, filepath, r.Payload.After.Bytes())
 	if err != nil {
@@ -219,7 +222,7 @@ func (d *Destination) extractMetadata(record opencdc.Record) (metadata, error) {
 	if err != nil {
 		return metadata{}, fmt.Errorf("failed to parse file_size: %w", err)
 	}
-	meta.filepath, ok = record.Metadata["file_path"]
+	meta.filepath, ok = record.Metadata[opencdc.MetadataCollection]
 	if !ok {
 		return metadata{}, NewInvalidChunkError("file_path not found")
 	}
