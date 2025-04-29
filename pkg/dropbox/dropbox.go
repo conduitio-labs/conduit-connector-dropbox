@@ -39,5 +39,5 @@ type FoldersClient interface {
 
 	// VerifyPath validates if path exists and is accessible
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-get_metadata
-	VerifyPath(ctx context.Context, path string) error
+	VerifyPath(ctx context.Context, path string) (bool, error)
 }

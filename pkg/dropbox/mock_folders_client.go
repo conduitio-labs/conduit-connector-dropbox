@@ -292,21 +292,31 @@ func (_c *MockFoldersClient_Longpoll_Call) RunAndReturn(run func(context.Context
 }
 
 // VerifyPath provides a mock function with given fields: ctx, path
-func (_m *MockFoldersClient) VerifyPath(ctx context.Context, path string) error {
+func (_m *MockFoldersClient) VerifyPath(ctx context.Context, path string) (bool, error) {
 	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for VerifyPath")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (bool, error)); ok {
+		return rf(ctx, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) bool); ok {
 		r0 = rf(ctx, path)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(bool)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockFoldersClient_VerifyPath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'VerifyPath'
@@ -328,12 +338,12 @@ func (_c *MockFoldersClient_VerifyPath_Call) Run(run func(ctx context.Context, p
 	return _c
 }
 
-func (_c *MockFoldersClient_VerifyPath_Call) Return(_a0 error) *MockFoldersClient_VerifyPath_Call {
-	_c.Call.Return(_a0)
+func (_c *MockFoldersClient_VerifyPath_Call) Return(_a0 bool, _a1 error) *MockFoldersClient_VerifyPath_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockFoldersClient_VerifyPath_Call) RunAndReturn(run func(context.Context, string) error) *MockFoldersClient_VerifyPath_Call {
+func (_c *MockFoldersClient_VerifyPath_Call) RunAndReturn(run func(context.Context, string) (bool, error)) *MockFoldersClient_VerifyPath_Call {
 	_c.Call.Return(run)
 	return _c
 }

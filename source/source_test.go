@@ -75,7 +75,7 @@ func TestSource_Open_Failed_VerifyPath(t *testing.T) {
 	defer is.NoErr(con.Teardown(ctx))
 
 	m.On("VerifyPath", mock.Anything, testPath).
-		Return(fmt.Errorf("path/not_found/"))
+		Return(false, fmt.Errorf("path/not_found/"))
 
 	err := con.Open(ctx, nil)
 	is.Equal(err.Error(), "error verifying remote path: path/not_found/")
@@ -135,6 +135,7 @@ func TestSource_ReadN_Success(t *testing.T) {
 	for _, r := range allRecords {
 		is.True(len(r.Payload.After.Bytes()) > 0)
 		is.True(r.Metadata["file_path"] != "")
+		is.True(r.Metadata[opencdc.MetadataCollection] != "")
 	}
 
 	m.AssertExpectations(t)
@@ -224,6 +225,7 @@ func TestSource_ReadN_ChunkedFile(t *testing.T) {
 		is.Equal(chunk.Metadata["chunk_index"], fmt.Sprintf("%d", i+1))
 		is.Equal(chunk.Metadata["total_chunks"], "5")
 		is.Equal(chunk.Metadata["file_path"], testFile.PathDisplay)
+		is.True(chunk.Metadata[opencdc.MetadataCollection] != "")
 	}
 
 	m.AssertExpectations(t)

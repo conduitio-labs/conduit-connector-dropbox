@@ -82,8 +82,8 @@ func (s *Source) Open(ctx context.Context, position opencdc.Position) error {
 	}
 
 	if s.config.Path != "" {
-		err = s.client.VerifyPath(ctx, s.config.Path)
-		if err != nil {
+		isFolder, err := s.client.VerifyPath(ctx, s.config.Path)
+		if err != nil || !isFolder {
 			return fmt.Errorf("error verifying remote path: %w", err)
 		}
 	}
