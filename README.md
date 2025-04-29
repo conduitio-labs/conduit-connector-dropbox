@@ -26,11 +26,12 @@ falls back to a fresh scan skipping already-processed files based on the
 
 Each record have following metadata fields to support downstream file reassembly:
 
-* `filename`: Filename of the file with extension.
+* `filename`: Name of the file with extension.
 * `file_id`: Unique Dropbox file ID.
 * `file_path`: Full path of the file in Dropbox (e.g., `/Photos/Vacation/image.jpg`).
 * `opencdc.collection`: Path to the parent directory containing the file (e.g., `/Photos/Vacation`).
 * `file_size`: Integer size of the file.
+* `is_chunked`: "true" if the file was split into multiple chunks; otherwise false or not present.
 * `chunk_index`: Index of the current chunk (starting from 1) – only present for chunks.
 * `total_chunks`: Total number of chunks – only present for chunked files.
 * `hash`: A hash of the file content. This field can be used to verify data integrity.
@@ -39,6 +40,16 @@ Each record have following metadata fields to support downstream file reassembly
 
 A destination connector pushes data from upstream resources to an external
 resource via Conduit.
+
+Each record should have following metadata fields:
+
+* `filename`: Name of the file with extension.
+* `opencdc.collection`: Path to the directory containing the file.
+* `file_size`: Integer size of the file.
+* `is_chunked`: "true" if the file was split into multiple chunks; otherwise false or not present.
+* `chunk_index`: Index of the current chunk (1-based, required only for chunked files).
+* `total_chunks`: Total number of chunks (required only for chunked files).
+* `hash`: A hash to uniquely identify the file.
 <!-- /readmegen:description -->
 
 ## Source Configuration Parameters
