@@ -19,9 +19,10 @@ import (
 )
 
 var (
-	ErrMissingUploadDirectory = fmt.Errorf("missing upload directory")
-	ErrMissingFilePath        = fmt.Errorf("missing file path")
-	ErrInvalidHash            = fmt.Errorf("missing or invalid content hash")
+	ErrMissingFilename   = fmt.Errorf("missing metadata filename")
+	ErrInvalidHash       = fmt.Errorf("missing or invalid content hash")
+	ErrMissingCollection = fmt.Errorf("missing metadata collection")
+	ErrInvalidSession    = fmt.Errorf("invalid session")
 )
 
 type InvalidChunkError struct {

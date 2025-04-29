@@ -21,29 +21,44 @@ import (
 )
 
 type FoldersClient interface {
-	// List returns metadata for all files/folders in path
+	// List returns metadata for all files/folders in path.
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder
 	List(ctx context.Context, path string, recursive bool, limit int) ([]Entry, string, bool, error)
 
-	// ListContinue retrieves additional results from a previous List call
+	// ListContinue retrieves additional results from a previous List call.
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue
 	ListContinue(ctx context.Context, cursor string) ([]Entry, string, bool, error)
 
-	// Longpoll checks for changes to folder contents (blocks until timeout or changes)
+	// Longpoll checks for changes to folder contents (blocks until timeout or changes).
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-longpoll
 	Longpoll(ctx context.Context, cursor string, timeout time.Duration) (bool, error)
 
-	// DownloadRange retrieves specific bytes from a file (supports partial downloads)
+	// DownloadRange retrieves specific bytes from a file (supports partial downloads).
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-download
 	DownloadRange(ctx context.Context, path string, start, length uint64) (io.ReadCloser, error)
 
-	// VerifyPath validates if path exists and is accessible
+	// VerifyPath validates if path exists and is accessible.
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-get_metadata
 	VerifyPath(ctx context.Context, path string) (bool, error)
 
+	// UploadFile uploads a file to remote Dropbox filepath.
+	// Always overwrites existing files at the same path.
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-upload
 	UploadFile(ctx context.Context, filepath string, content []byte) (*UploadFileResponse, error)
+
+	// CreateSession starts a multi-chunk upload session for large files.
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-upload_session-start
 	CreateSession(ctx context.Context, content []byte) (*SessionResponse, error)
+
+	// UploadChunk uploads a chunk to an existing upload session.
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-upload_session-append
 	UploadChunk(ctx context.Context, sessionID string, content []byte, offset uint) error
+
+	// CloseSession finishes a multi-chunk upload session and creates the file.
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-upload_session-finish
 	CloseSession(ctx context.Context, filepath, sessionID string, offset uint) (*UploadFileResponse, error)
+
+	// DeleteFile permanently removes a file or folder from Dropbox.
+	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-delete
 	DeleteFile(ctx context.Context, filepath string) error
 }
