@@ -17,13 +17,14 @@ package dropbox
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 )
 
 var (
@@ -238,10 +239,10 @@ func (c *HTTPClient) UploadFile(ctx context.Context, filepath string, content []
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("decode response failed: %w", err)
 	}
-	resp.Body.Close()
 	return response, nil
 }
 
@@ -256,10 +257,10 @@ func (c *HTTPClient) CreateSession(ctx context.Context, content []byte) (*Sessio
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("decode response failed: %w", err)
 	}
-	resp.Body.Close()
 	return response, nil
 }
 
@@ -317,10 +318,10 @@ func (c *HTTPClient) CloseSession(ctx context.Context, filepath, sessionid strin
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("decode response failed: %w", err)
 	}
-	resp.Body.Close()
 	return response, nil
 }
 

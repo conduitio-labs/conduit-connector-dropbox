@@ -92,9 +92,10 @@ func (d *Destination) Teardown(ctx context.Context) error {
 }
 
 func (d *Destination) deleteFile(ctx context.Context, r opencdc.Record) error {
-	directory, ok := r.Metadata[opencdc.MetadataCollection]
-	if !ok {
-		return ErrMissingCollection
+	// Default to root folder if no collection specified
+	directory := "/"
+	if val, ok := r.Metadata[opencdc.MetadataCollection]; ok {
+		directory = val
 	}
 
 	filename, ok := r.Metadata["filename"]
@@ -138,6 +139,7 @@ func (d *Destination) uploadFileChunk(ctx context.Context, r opencdc.Record) err
 		return err
 	}
 
+	// 1-based indexing.
 	if metaData.index == 1 {
 		response, err := d.client.CreateSession(ctx, r.Payload.After.Bytes())
 		if err != nil {
@@ -180,11 +182,12 @@ func (d *Destination) uploadFileChunk(ctx context.Context, r opencdc.Record) err
 	return nil
 }
 
+// metadata contains chunked file transfer information.
 type metadata struct {
-	index       int64
-	totalChunks int64
-	hash        string
-	filesize    uint64
+	index       int64  // Chunk number (1-based)
+	totalChunks int64  // Total chunks (inclusive)
+	hash        string // File integrity hash
+	filesize    uint64 // Total file size in bytes
 }
 
 func (d *Destination) extractMetadata(record opencdc.Record) (metadata, error) {
@@ -229,9 +232,10 @@ func (d *Destination) extractMetadata(record opencdc.Record) (metadata, error) {
 }
 
 func (d *Destination) getUploadPath(r opencdc.Record) (string, error) {
-	directory, ok := r.Metadata[opencdc.MetadataCollection]
-	if !ok {
-		return "", ErrMissingCollection
+	// Default to root folder if no collection specified
+	directory := "/"
+	if val, ok := r.Metadata[opencdc.MetadataCollection]; ok {
+		directory = val
 	}
 
 	filename, ok := r.Metadata["filename"]
