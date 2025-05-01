@@ -5,23 +5,23 @@
 <!-- readmegen:description -->
 ## Source
 
-The Dropbox Source Connector reads files from a configured Dropbox path and converts 
-them into `opencdc.Record` that can be processed by Conduit. Files larger than 
-`fileChunkSizeBytes` (maximum value 4MB) are split into smaller chunks, and each 
+The Dropbox Source Connector reads files from a configured Dropbox path and converts
+them into `opencdc.Record` that can be processed by Conduit. Files larger than
+`fileChunkSizeBytes` (maximum value 4MB) are split into smaller chunks, and each
 chunk is emitted as a separate record.
 
 ### Snapshot (Initial Sync)
 
-When the connector starts without a saved position, it triggers a snapshot listing 
-all files in the configured Dropbox path. A cursor and the last processed timestamp 
+When the connector starts without a saved position, it triggers a snapshot listing
+all files in the configured Dropbox path. A cursor and the last processed timestamp
 are saved at the end of snapshotting.
 
 ### Change Data Capture
 
-After the snapshot, the connector uses Dropbox's Longpoll API to wait for changes 
-(file creation, modification, deletion). Upon detecting changes, it fetches updated 
-entries using the saved cursor. If Dropbox reports expired cursor the connector 
-falls back to a fresh scan skipping already-processed files based on the 
+After the snapshot, the connector uses Dropbox's Longpoll API to wait for changes
+(file creation, modification, deletion). Upon detecting changes, it fetches updated
+entries using the saved cursor. If Dropbox reports expired cursor the connector
+falls back to a fresh scan skipping already-processed files based on the
 `lastProcessedUnixTime` field.
 
 Each record have following metadata fields to support downstream file reassembly:
@@ -115,7 +115,7 @@ pipelines:
           # Whether to extract and encode the record payload with a schema.
           # Type: bool
           # Required: no
-          sdk.schema.extract.payload.enabled: "true"
+          sdk.schema.extract.payload.enabled: "false"
           # The subject of the payload schema. If the record metadata contains
           # the field "opencdc.collection" it is prepended to the subject name
           # and separated with a dot.

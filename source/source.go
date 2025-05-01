@@ -22,6 +22,7 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-dropbox/config"
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
+	"github.com/conduitio/conduit-commons/lang"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
@@ -58,7 +59,16 @@ type Config struct {
 }
 
 func NewSource() sdk.Source {
-	return sdk.SourceWithMiddleware(&Source{})
+	return sdk.SourceWithMiddleware(&Source{
+		config: Config{
+			DefaultSourceMiddleware: sdk.DefaultSourceMiddleware{
+				// disable schema extraction by default, as the source produces raw payload data
+				SourceWithSchemaExtraction: sdk.SourceWithSchemaExtraction{
+					PayloadEnabled: lang.Ptr(false),
+				},
+			},
+		},
+	})
 }
 
 func (s *Source) Config() sdk.SourceConfig {
