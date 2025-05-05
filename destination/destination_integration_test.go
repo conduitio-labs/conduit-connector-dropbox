@@ -48,7 +48,10 @@ func TestDestination_Write(t *testing.T) {
 	is.NoErr(err)
 
 	// Cleanup before starting
-	testutil.CleanupTestFiles(ctx, t, client, testFolderPath)
+	err = testutil.CleanupTestFiles(ctx, client, testFolderPath)
+	if err != nil {
+		t.Logf("warning: %v", err)
+	}
 
 	dest := &Destination{
 		config: Config{

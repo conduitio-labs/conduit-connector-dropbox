@@ -16,24 +16,23 @@ package testutil
 
 import (
 	"context"
-	"testing"
+	"fmt"
 
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
 )
 
-func CleanupTestFiles(ctx context.Context, t *testing.T, client dropbox.FoldersClient, path string) {
-	t.Helper()
-
+func CleanupTestFiles(ctx context.Context, client dropbox.FoldersClient, path string) error {
 	entries, _, _, err := client.List(ctx, path, false, 100)
 	if err != nil {
-		t.Logf("warning: failed to list test folder for cleanup: %v", err)
-		return
+		return fmt.Errorf("failed to list test folder for cleanup: %w", err)
 	}
 
 	for _, entry := range entries {
 		err := client.DeleteFile(ctx, entry.PathDisplay)
 		if err != nil {
-			t.Logf("warning: failed to delete test file %s: %v", entry.PathDisplay, err)
+			return fmt.Errorf("failed to delete test file %s: %w", entry.PathDisplay, err)
 		}
 	}
+
+	return nil
 }

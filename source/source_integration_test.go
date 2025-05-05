@@ -46,7 +46,10 @@ func TestSource_ReadN(t *testing.T) {
 	is.NoErr(err)
 
 	// Cleanup before starting
-	testutil.CleanupTestFiles(ctx, t, client, testFolderPath)
+	err = testutil.CleanupTestFiles(ctx, client, testFolderPath)
+	if err != nil {
+		t.Logf("warning: %v", err)
+	}
 
 	// Create test files
 	file1Content := []byte("test file 1 content")
