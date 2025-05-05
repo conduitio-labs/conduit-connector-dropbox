@@ -23,6 +23,7 @@ import (
 
 	config "github.com/conduitio-labs/conduit-connector-dropbox/config"
 	dropbox "github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
+	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/testutil"
 	"github.com/conduitio/conduit-commons/opencdc"
 	"github.com/matryer/is"
 )
@@ -45,7 +46,7 @@ func TestSource_ReadN(t *testing.T) {
 	is.NoErr(err)
 
 	// Cleanup before starting
-	cleanupTestFiles(ctx, t, client)
+	testutil.CleanupTestFiles(ctx, t, client, testFolderPath)
 
 	// Create test files
 	file1Content := []byte("test file 1 content")
@@ -107,21 +108,4 @@ func TestSource_ReadN(t *testing.T) {
 	// Combine chunks to verify content matches original
 	combined := append(chunks[0].Payload.After.Bytes(), chunks[1].Payload.After.Bytes()...)
 	is.Equal(combined, file2Content)
-}
-
-func cleanupTestFiles(ctx context.Context, t *testing.T, client dropbox.FoldersClient) {
-	t.Helper()
-
-	entries, _, _, err := client.List(ctx, testFolderPath, false, 10)
-	if err != nil {
-		t.Logf("warning: failed to list test folder for cleanup: %v", err)
-		return
-	}
-
-	for _, entry := range entries {
-		err := client.DeleteFile(ctx, entry.PathDisplay)
-		if err != nil {
-			t.Logf("warning: failed to delete test folder %s: %v", entry.PathDisplay, err)
-		}
-	}
 }

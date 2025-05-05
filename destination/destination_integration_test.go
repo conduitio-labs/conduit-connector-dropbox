@@ -25,6 +25,7 @@ import (
 
 	config "github.com/conduitio-labs/conduit-connector-dropbox/config"
 	dropbox "github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
+	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/testutil"
 	"github.com/conduitio/conduit-commons/opencdc"
 	"github.com/matryer/is"
 )
@@ -47,7 +48,7 @@ func TestDestination_Write(t *testing.T) {
 	is.NoErr(err)
 
 	// Cleanup before starting
-	cleanupTestFiles(ctx, t, client)
+	testutil.CleanupTestFiles(ctx, t, client, testFolderPath)
 
 	dest := &Destination{
 		config: Config{
@@ -189,21 +190,4 @@ func TestDestination_Write(t *testing.T) {
 		_, err := dest.Write(ctx, []opencdc.Record{record})
 		is.True(err != nil)
 	})
-}
-
-func cleanupTestFiles(ctx context.Context, t *testing.T, client dropbox.FoldersClient) {
-	t.Helper()
-
-	entries, _, _, err := client.List(ctx, testFolderPath, false, 100)
-	if err != nil {
-		t.Logf("warning: failed to list test folder for cleanup: %v", err)
-		return
-	}
-
-	for _, entry := range entries {
-		err := client.DeleteFile(ctx, entry.PathDisplay)
-		if err != nil {
-			t.Logf("warning: failed to delete test file %s: %v", entry.PathDisplay, err)
-		}
-	}
 }
