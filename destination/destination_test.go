@@ -50,7 +50,7 @@ func TestDestination_Open(t *testing.T) {
 	is.NoErr(err)
 }
 
-func TestDestination_Write(t *testing.T) {
+func TestDestination_WriteSuccess(t *testing.T) {
 	is := is.New(t)
 	ctx := context.Background()
 
