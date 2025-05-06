@@ -61,10 +61,6 @@ pipelines:
           # Type: int
           # Required: no
           fileChunkSizeBytes: "3145728"
-          # Maximum number of entries to fetch in a single list_folder request.
-          # Type: int
-          # Required: no
-          limit: "1000"
           # Timeout for Dropbox longpolling requests.
           # Type: duration
           # Required: no

@@ -55,11 +55,6 @@ specification:
         type: int
         default: "3145728"
         validations: []
-      - name: limit
-        description: Maximum number of entries to fetch in a single list_folder request.
-        type: int
-        default: "1000"
-        validations: []
       - name: longpollTimeout
         description: Timeout for Dropbox longpolling requests.
         type: duration
