@@ -17,4 +17,6 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Test
+        env:
+          DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
         run: make test GOTEST_FLAGS="-v -count=1"
