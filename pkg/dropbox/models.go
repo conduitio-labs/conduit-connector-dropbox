@@ -14,9 +14,17 @@
 
 package dropbox
 
-// Config contains shared config parameters, common to the source and
-// destination.
-type Config struct {
-	// Token is used to authenticate API access.
-	Token string `json:"token" validate:"required"`
+import "time"
+
+// Entry represents metadata for files, folders, or deleted items in Dropbox.
+// Matches the structure returned by list_folder endpoint.
+// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder
+type Entry struct {
+	Tag            string    `json:".tag"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	PathDisplay    string    `json:"path_display"`
+	ServerModified time.Time `json:"server_modified"`
+	Size           uint64    `json:"size,omitempty"`
+	ContentHash    string    `json:"content_hash,omitempty"`
 }

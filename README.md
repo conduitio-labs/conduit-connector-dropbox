@@ -3,14 +3,45 @@
 [Conduit](https://conduit.io) connector for <!-- readmegen:name -->Dropbox<!-- /readmegen:name -->.
 
 <!-- readmegen:description -->
-Source and destination connector for Dropbox.<!-- /readmegen:description -->
-
 ## Source
 
-A source connector pulls data from an external resource and pushes it to
-downstream resources via Conduit.
+The Dropbox Source Connector reads files from a configured Dropbox path and converts
+them into `opencdc.Record` that can be processed by Conduit. Files larger than
+`fileChunkSizeBytes` (maximum value 4MB) are split into smaller chunks, and each
+chunk is emitted as a separate record.
 
-### Configuration
+### Snapshot (Initial Sync)
+
+When the connector starts without a saved position, it triggers a snapshot listing
+all files in the configured Dropbox path. A cursor and the last processed timestamp
+are saved at the end of snapshotting.
+
+### Change Data Capture
+
+After the snapshot, the connector uses Dropbox's Longpoll API to wait for changes
+(file creation, modification, deletion). Upon detecting changes, it fetches updated
+entries using the saved cursor. If Dropbox reports expired cursor the connector
+falls back to a fresh scan skipping already-processed files based on the
+`lastProcessedUnixTime` field.
+
+Each record have following metadata fields to support downstream file reassembly:
+
+* `filename`: Filename of the file with extension.
+* `file_id`: Unique Dropbox file ID.
+* `file_path`: Full path of the file in Dropbox (e.g., `/Photos/Vacation/image.jpg`).
+* `opencdc.collection`: Path to the parent directory containing the file (e.g., `/Photos/Vacation`).
+* `file_size`: Integer size of the file.
+* `chunk_index`: Index of the current chunk (starting from 1) – only present for chunks.
+* `total_chunks`: Total number of chunks – only present for chunked files.
+* `hash`: A hash of the file content. This field can be used to verify data integrity.
+
+## Destination
+
+A destination connector pushes data from upstream resources to an external
+resource via Conduit.
+<!-- /readmegen:description -->
+
+## Source Configuration Parameters
 
 <!-- readmegen:source.parameters.yaml -->
 ```yaml
@@ -22,14 +53,31 @@ pipelines:
       - id: example
         plugin: "dropbox"
         settings:
-          # SourceConfigParam must be provided by the user.
-          # Type: string
-          # Required: yes
-          sourceConfigParam: ""
           # Token is used to authenticate API access.
           # Type: string
           # Required: yes
           token: ""
+          # Size of a file chunk in bytes to split large files, maximum is 4MB.
+          # Type: int
+          # Required: no
+          fileChunkSizeBytes: "3145728"
+          # Timeout for Dropbox longpolling requests.
+          # Type: duration
+          # Required: no
+          longpollTimeout: "30s"
+          # Path of the Dropbox directory to read/write files. Empty path
+          # implies root directory.
+          # Type: string
+          # Required: no
+          path: ""
+          # Maximum number of retry attempts.
+          # Type: int
+          # Required: no
+          retries: "0"
+          # Delay between retry attempts.
+          # Type: duration
+          # Required: no
+          retryDelay: "10s"
           # Maximum delay before an incomplete batch is read from the source.
           # Type: duration
           # Required: no
@@ -63,7 +111,7 @@ pipelines:
           # Whether to extract and encode the record payload with a schema.
           # Type: bool
           # Required: no
-          sdk.schema.extract.payload.enabled: "true"
+          sdk.schema.extract.payload.enabled: "false"
           # The subject of the payload schema. If the record metadata contains
           # the field "opencdc.collection" it is prepended to the subject name
           # and separated with a dot.
@@ -77,12 +125,7 @@ pipelines:
 ```
 <!-- /readmegen:source.parameters.yaml -->
 
-## Destination
-
-A destination connector pushes data from upstream resources to an external
-resource via Conduit.
-
-### Configuration
+## Destination Configuration Parameters
 
 <!-- readmegen:destination.parameters.yaml -->
 ```yaml
@@ -102,6 +145,11 @@ pipelines:
           # Type: string
           # Required: no
           destinationConfigParam: "yes"
+          # Path of the Dropbox directory to read/write files. Empty path
+          # implies root directory.
+          # Type: string
+          # Required: no
+          path: ""
           # Maximum delay before an incomplete batch is written to the
           # destination.
           # Type: duration
@@ -159,8 +207,7 @@ Run `make build` to build the connector.
 
 ## Testing
 
-Run `make test` to run all the unit tests. Run `make test-integration` to run
-the integration tests.
+Run `make test` to run all the tests.
 
 The Docker compose file at `test/docker-compose.yml` can be used to run the
 required resource locally.
@@ -186,3 +233,5 @@ The release is done in two steps:
 
 - [ ] Item A
 - [ ] Item B
+
+![scarf pixel](https://static.scarf.sh/a.png?x-pxid=0944a395-adda-4265-b576-639a1592d25c)

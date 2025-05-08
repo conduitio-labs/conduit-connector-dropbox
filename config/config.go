@@ -12,19 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dropbox_test
+package config
 
-import (
-	"context"
-	"testing"
-
-	dropbox "github.com/conduitio-labs/conduit-connector-dropbox"
-	"github.com/matryer/is"
-)
-
-func TestTeardownSource_NoOpen(t *testing.T) {
-	is := is.New(t)
-	con := dropbox.NewSource()
-	err := con.Teardown(context.Background())
-	is.NoErr(err)
+// Config contains shared config parameters, common to the source and
+// destination.
+type Config struct {
+	// Token is used to authenticate API access.
+	Token string `json:"token" validate:"required"`
+	// Path of the Dropbox directory to read/write files. Empty path implies root directory.
+	Path string `json:"path"`
 }
