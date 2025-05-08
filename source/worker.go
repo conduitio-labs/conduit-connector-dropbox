@@ -130,7 +130,7 @@ func (w *Worker) process(ctx context.Context) error {
 
 // initialSync performs the first complete sync of the target path.
 func (w *Worker) initialSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, w.config.Limit)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, *w.config.BatchSize)
 	if err != nil {
 		return fmt.Errorf("list failed: %w", err)
 	}
@@ -147,7 +147,7 @@ func (w *Worker) initialSync(ctx context.Context) error {
 
 // reSync performs a full resync when the cursor expires.
 func (w *Worker) reSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, w.config.Limit)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, *w.config.BatchSize)
 	if err != nil {
 		return fmt.Errorf("resync list failed: %w", err)
 	}

@@ -66,11 +66,6 @@ specification:
         type: int
         default: "3145728"
         validations: []
-      - name: limit
-        description: Maximum number of entries to fetch in a single list_folder request.
-        type: int
-        default: "1000"
-        validations: []
       - name: longpollTimeout
         description: Timeout for Dropbox longpolling requests.
         type: duration
@@ -134,7 +129,7 @@ specification:
       - name: sdk.schema.extract.payload.enabled
         description: Whether to extract and encode the record payload with a schema.
         type: bool
-        default: "true"
+        default: "false"
         validations: []
       - name: sdk.schema.extract.payload.subject
         description: |-

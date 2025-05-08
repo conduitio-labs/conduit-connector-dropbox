@@ -72,10 +72,6 @@ pipelines:
           # Type: int
           # Required: no
           fileChunkSizeBytes: "3145728"
-          # Maximum number of entries to fetch in a single list_folder request.
-          # Type: int
-          # Required: no
-          limit: "1000"
           # Timeout for Dropbox longpolling requests.
           # Type: duration
           # Required: no
@@ -126,7 +122,7 @@ pipelines:
           # Whether to extract and encode the record payload with a schema.
           # Type: bool
           # Required: no
-          sdk.schema.extract.payload.enabled: "true"
+          sdk.schema.extract.payload.enabled: "false"
           # The subject of the payload schema. If the record metadata contains
           # the field "opencdc.collection" it is prepended to the subject name
           # and separated with a dot.
@@ -244,3 +240,5 @@ The release is done in two steps:
 
 - [ ] Item A
 - [ ] Item B
+
+![scarf pixel](https://static.scarf.sh/a.png?x-pxid=0944a395-adda-4265-b576-639a1592d25c)
