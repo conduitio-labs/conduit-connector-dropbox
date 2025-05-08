@@ -233,3 +233,5 @@ The release is done in two steps:
 
 - [ ] Item A
 - [ ] Item B
+
+![scarf pixel](https://static.scarf.sh/a.png?x-pxid=0944a395-adda-4265-b576-639a1592d25c)
