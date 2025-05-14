@@ -83,6 +83,7 @@ func TestDestination_Write(t *testing.T) {
 					opencdc.MetadataCollection: "/test",
 					"filename":                 "file.txt",
 					"hash":                     "mock-hash",
+					"file_size":                "12",
 				},
 			},
 		}
@@ -90,6 +91,7 @@ func TestDestination_Write(t *testing.T) {
 		m.On("UploadFile", ctx, "/test/file.txt", []byte("test content")).
 			Return(&dropbox.UploadFileResponse{
 				ContentHash: "mock-hash",
+				Size:        12,
 			}, nil)
 
 		n, err := dest.Write(ctx, records)

@@ -92,18 +92,12 @@ func (d *Destination) Teardown(ctx context.Context) error {
 }
 
 func (d *Destination) deleteFile(ctx context.Context, r opencdc.Record) error {
-	// Default to root folder if no collection specified
-	directory := "/"
-	if val, ok := r.Metadata[opencdc.MetadataCollection]; ok {
-		directory = val
+	filepath, err := d.getFilepath(r)
+	if err != nil {
+		return err
 	}
 
-	filename, ok := r.Metadata["filename"]
-	if !ok {
-		return ErrMissingFilename
-	}
-
-	err := d.client.DeleteFile(ctx, filepath.Join(directory, filename))
+	err = d.client.DeleteFile(ctx, filepath)
 	if err != nil {
 		return fmt.Errorf("error deleting file: %w", err)
 	}
@@ -112,7 +106,12 @@ func (d *Destination) deleteFile(ctx context.Context, r opencdc.Record) error {
 }
 
 func (d *Destination) uploadFile(ctx context.Context, r opencdc.Record) error {
-	filepath, err := d.getUploadPath(r)
+	metaData, err := d.extractMetadata(r)
+	if err != nil {
+		return err
+	}
+
+	filepath, err := d.getFilepath(r)
 	if err != nil {
 		return err
 	}
@@ -121,9 +120,8 @@ func (d *Destination) uploadFile(ctx context.Context, r opencdc.Record) error {
 	if err != nil {
 		return fmt.Errorf("error uploading file: %w", err)
 	}
-	hash := r.Metadata["hash"]
-	if response.ContentHash != hash {
-		return ErrInvalidHash
+	if response.Size != metaData.filesize {
+		return fmt.Errorf("corrupt file upload: %w", err)
 	}
 	return nil
 }
@@ -134,7 +132,7 @@ func (d *Destination) uploadFileChunk(ctx context.Context, r opencdc.Record) err
 		return err
 	}
 
-	filepath, err := d.getUploadPath(r)
+	filepath, err := d.getFilepath(r)
 	if err != nil {
 		return err
 	}
@@ -172,7 +170,7 @@ func (d *Destination) uploadFileChunk(ctx context.Context, r opencdc.Record) err
 		if err != nil {
 			return fmt.Errorf("error closing upload session: %w", err)
 		}
-		if response.ContentHash != metaData.hash || response.Size != metaData.filesize {
+		if response.Size != metaData.filesize {
 			return fmt.Errorf("corrupt file upload: %w", err)
 		}
 		// close session
@@ -231,11 +229,11 @@ func (d *Destination) extractMetadata(record opencdc.Record) (metadata, error) {
 	return meta, nil
 }
 
-func (d *Destination) getUploadPath(r opencdc.Record) (string, error) {
+func (d *Destination) getFilepath(r opencdc.Record) (string, error) {
 	// Default to root folder if no collection specified
 	directory := "/"
 	if val, ok := r.Metadata[opencdc.MetadataCollection]; ok {
-		directory = val
+		directory += val
 	}
 
 	filename, ok := r.Metadata["filename"]
