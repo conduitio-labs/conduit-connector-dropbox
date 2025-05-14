@@ -24,6 +24,173 @@ func (_m *MockFoldersClient) EXPECT() *MockFoldersClient_Expecter {
 	return &MockFoldersClient_Expecter{mock: &_m.Mock}
 }
 
+// CloseSession provides a mock function with given fields: ctx, filepath, sessionID, offset
+func (_m *MockFoldersClient) CloseSession(ctx context.Context, filepath string, sessionID string, offset uint) (*UploadFileResponse, error) {
+	ret := _m.Called(ctx, filepath, sessionID, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CloseSession")
+	}
+
+	var r0 *UploadFileResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint) (*UploadFileResponse, error)); ok {
+		return rf(ctx, filepath, sessionID, offset)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint) *UploadFileResponse); ok {
+		r0 = rf(ctx, filepath, sessionID, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*UploadFileResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, uint) error); ok {
+		r1 = rf(ctx, filepath, sessionID, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockFoldersClient_CloseSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CloseSession'
+type MockFoldersClient_CloseSession_Call struct {
+	*mock.Call
+}
+
+// CloseSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - filepath string
+//   - sessionID string
+//   - offset uint
+func (_e *MockFoldersClient_Expecter) CloseSession(ctx interface{}, filepath interface{}, sessionID interface{}, offset interface{}) *MockFoldersClient_CloseSession_Call {
+	return &MockFoldersClient_CloseSession_Call{Call: _e.mock.On("CloseSession", ctx, filepath, sessionID, offset)}
+}
+
+func (_c *MockFoldersClient_CloseSession_Call) Run(run func(ctx context.Context, filepath string, sessionID string, offset uint)) *MockFoldersClient_CloseSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(uint))
+	})
+	return _c
+}
+
+func (_c *MockFoldersClient_CloseSession_Call) Return(_a0 *UploadFileResponse, _a1 error) *MockFoldersClient_CloseSession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockFoldersClient_CloseSession_Call) RunAndReturn(run func(context.Context, string, string, uint) (*UploadFileResponse, error)) *MockFoldersClient_CloseSession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateSession provides a mock function with given fields: ctx, content
+func (_m *MockFoldersClient) CreateSession(ctx context.Context, content []byte) (*SessionResponse, error) {
+	ret := _m.Called(ctx, content)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateSession")
+	}
+
+	var r0 *SessionResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []byte) (*SessionResponse, error)); ok {
+		return rf(ctx, content)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []byte) *SessionResponse); ok {
+		r0 = rf(ctx, content)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*SessionResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
+		r1 = rf(ctx, content)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockFoldersClient_CreateSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateSession'
+type MockFoldersClient_CreateSession_Call struct {
+	*mock.Call
+}
+
+// CreateSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - content []byte
+func (_e *MockFoldersClient_Expecter) CreateSession(ctx interface{}, content interface{}) *MockFoldersClient_CreateSession_Call {
+	return &MockFoldersClient_CreateSession_Call{Call: _e.mock.On("CreateSession", ctx, content)}
+}
+
+func (_c *MockFoldersClient_CreateSession_Call) Run(run func(ctx context.Context, content []byte)) *MockFoldersClient_CreateSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].([]byte))
+	})
+	return _c
+}
+
+func (_c *MockFoldersClient_CreateSession_Call) Return(_a0 *SessionResponse, _a1 error) *MockFoldersClient_CreateSession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockFoldersClient_CreateSession_Call) RunAndReturn(run func(context.Context, []byte) (*SessionResponse, error)) *MockFoldersClient_CreateSession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteFile provides a mock function with given fields: ctx, filepath
+func (_m *MockFoldersClient) DeleteFile(ctx context.Context, filepath string) error {
+	ret := _m.Called(ctx, filepath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteFile")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, filepath)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockFoldersClient_DeleteFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteFile'
+type MockFoldersClient_DeleteFile_Call struct {
+	*mock.Call
+}
+
+// DeleteFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - filepath string
+func (_e *MockFoldersClient_Expecter) DeleteFile(ctx interface{}, filepath interface{}) *MockFoldersClient_DeleteFile_Call {
+	return &MockFoldersClient_DeleteFile_Call{Call: _e.mock.On("DeleteFile", ctx, filepath)}
+}
+
+func (_c *MockFoldersClient_DeleteFile_Call) Run(run func(ctx context.Context, filepath string)) *MockFoldersClient_DeleteFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockFoldersClient_DeleteFile_Call) Return(_a0 error) *MockFoldersClient_DeleteFile_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockFoldersClient_DeleteFile_Call) RunAndReturn(run func(context.Context, string) error) *MockFoldersClient_DeleteFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DownloadRange provides a mock function with given fields: ctx, path, start, length
 func (_m *MockFoldersClient) DownloadRange(ctx context.Context, path string, start uint64, length uint64) (io.ReadCloser, error) {
 	ret := _m.Called(ctx, path, start, length)
@@ -287,6 +454,115 @@ func (_c *MockFoldersClient_Longpoll_Call) Return(_a0 bool, _a1 error) *MockFold
 }
 
 func (_c *MockFoldersClient_Longpoll_Call) RunAndReturn(run func(context.Context, string, time.Duration) (bool, error)) *MockFoldersClient_Longpoll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UploadChunk provides a mock function with given fields: ctx, sessionID, content, offset
+func (_m *MockFoldersClient) UploadChunk(ctx context.Context, sessionID string, content []byte, offset uint) error {
+	ret := _m.Called(ctx, sessionID, content, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UploadChunk")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, []byte, uint) error); ok {
+		r0 = rf(ctx, sessionID, content, offset)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockFoldersClient_UploadChunk_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UploadChunk'
+type MockFoldersClient_UploadChunk_Call struct {
+	*mock.Call
+}
+
+// UploadChunk is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+//   - content []byte
+//   - offset uint
+func (_e *MockFoldersClient_Expecter) UploadChunk(ctx interface{}, sessionID interface{}, content interface{}, offset interface{}) *MockFoldersClient_UploadChunk_Call {
+	return &MockFoldersClient_UploadChunk_Call{Call: _e.mock.On("UploadChunk", ctx, sessionID, content, offset)}
+}
+
+func (_c *MockFoldersClient_UploadChunk_Call) Run(run func(ctx context.Context, sessionID string, content []byte, offset uint)) *MockFoldersClient_UploadChunk_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].([]byte), args[3].(uint))
+	})
+	return _c
+}
+
+func (_c *MockFoldersClient_UploadChunk_Call) Return(_a0 error) *MockFoldersClient_UploadChunk_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockFoldersClient_UploadChunk_Call) RunAndReturn(run func(context.Context, string, []byte, uint) error) *MockFoldersClient_UploadChunk_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UploadFile provides a mock function with given fields: ctx, filepath, content
+func (_m *MockFoldersClient) UploadFile(ctx context.Context, filepath string, content []byte) (*UploadFileResponse, error) {
+	ret := _m.Called(ctx, filepath, content)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UploadFile")
+	}
+
+	var r0 *UploadFileResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, []byte) (*UploadFileResponse, error)); ok {
+		return rf(ctx, filepath, content)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, []byte) *UploadFileResponse); ok {
+		r0 = rf(ctx, filepath, content)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*UploadFileResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, []byte) error); ok {
+		r1 = rf(ctx, filepath, content)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockFoldersClient_UploadFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UploadFile'
+type MockFoldersClient_UploadFile_Call struct {
+	*mock.Call
+}
+
+// UploadFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - filepath string
+//   - content []byte
+func (_e *MockFoldersClient_Expecter) UploadFile(ctx interface{}, filepath interface{}, content interface{}) *MockFoldersClient_UploadFile_Call {
+	return &MockFoldersClient_UploadFile_Call{Call: _e.mock.On("UploadFile", ctx, filepath, content)}
+}
+
+func (_c *MockFoldersClient_UploadFile_Call) Run(run func(ctx context.Context, filepath string, content []byte)) *MockFoldersClient_UploadFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].([]byte))
+	})
+	return _c
+}
+
+func (_c *MockFoldersClient_UploadFile_Call) Return(_a0 *UploadFileResponse, _a1 error) *MockFoldersClient_UploadFile_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockFoldersClient_UploadFile_Call) RunAndReturn(run func(context.Context, string, []byte) (*UploadFileResponse, error)) *MockFoldersClient_UploadFile_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -12,19 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dropbox_test
+package destination
 
 import (
-	"context"
-	"testing"
-
-	dropbox "github.com/conduitio-labs/conduit-connector-dropbox"
-	"github.com/matryer/is"
+	"fmt"
 )
 
-func TestTeardown_NoOpen(t *testing.T) {
-	is := is.New(t)
-	con := dropbox.NewDestination()
-	err := con.Teardown(context.Background())
-	is.NoErr(err)
+var (
+	ErrMissingFilename = fmt.Errorf("missing metadata filename")
+	ErrInvalidSession  = fmt.Errorf("invalid session")
+)
+
+type InvalidChunkError struct {
+	message string
+}
+
+func (e InvalidChunkError) Error() string {
+	return fmt.Sprintf("invalid chunk: %s", e.message)
+}
+
+func NewInvalidChunkError(msg string) InvalidChunkError {
+	return InvalidChunkError{msg}
 }

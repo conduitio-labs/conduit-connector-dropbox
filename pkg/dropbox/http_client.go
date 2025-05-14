@@ -17,13 +17,14 @@ package dropbox
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 )
 
 var (
@@ -72,11 +73,10 @@ func (c *HTTPClient) List(ctx context.Context, path string, recursive bool, limi
 	}
 
 	headers := map[string]string{
-		"Authorization": "Bearer " + c.accessToken,
-		"Content-Type":  "application/json",
+		"Content-Type": "application/json",
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder", headers, bytes.NewReader(body))
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder", headers, bytes.NewReader(body), false)
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -106,11 +106,10 @@ func (c *HTTPClient) ListContinue(ctx context.Context, cursor string) ([]Entry, 
 	}
 
 	headers := map[string]string{
-		"Authorization": "Bearer " + c.accessToken,
-		"Content-Type":  "application/json",
+		"Content-Type": "application/json",
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder/continue", headers, bytes.NewReader(body))
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/list_folder/continue", headers, bytes.NewReader(body), false)
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -144,7 +143,7 @@ func (c *HTTPClient) Longpoll(ctx context.Context, cursor string, timeout time.D
 		"Content-Type": "application/json", // No Authorization required for this endpoint
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, notifyURL+"/files/list_folder/longpoll", headers, bytes.NewReader(body))
+	resp, err := c.makeRequest(ctx, http.MethodPost, notifyURL+"/files/list_folder/longpoll", headers, bytes.NewReader(body), true)
 	if err != nil {
 		return false, err
 	}
@@ -172,7 +171,6 @@ func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, leng
 	}
 
 	headers := map[string]string{
-		"Authorization":   "Bearer " + c.accessToken,
 		"Dropbox-API-Arg": string(argHeader),
 	}
 
@@ -181,7 +179,7 @@ func (c *HTTPClient) DownloadRange(ctx context.Context, path string, start, leng
 		headers["Range"] = fmt.Sprintf("bytes=%d-%d", start, start+length-1)
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/download", headers, nil)
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/download", headers, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -206,11 +204,10 @@ func (c *HTTPClient) VerifyPath(ctx context.Context, path string) (bool, error) 
 	}
 
 	headers := map[string]string{
-		"Authorization": "Bearer " + c.accessToken,
-		"Content-Type":  "application/json",
+		"Content-Type": "application/json",
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/get_metadata", headers, bytes.NewReader(body))
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/get_metadata", headers, bytes.NewReader(body), false)
 	if err != nil {
 		return false, err
 	}
@@ -231,11 +228,135 @@ func (c *HTTPClient) VerifyPath(ctx context.Context, path string) (bool, error) 
 	return true, nil
 }
 
+// UploadFile uploads a file to remote dropbox filepath.
+func (c *HTTPClient) UploadFile(ctx context.Context, filepath string, content []byte) (*UploadFileResponse, error) {
+	response := &UploadFileResponse{}
+	headers := map[string]string{
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": fmt.Sprintf(`{"path": "%s","mode": "overwrite","mute": false}`, filepath),
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload", headers, bytes.NewReader(content), false)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+	return response, nil
+}
+
+// CreateSession uploads the first chunk of the file and creates a session for remaining chunks.
+func (c *HTTPClient) CreateSession(ctx context.Context, content []byte) (*SessionResponse, error) {
+	response := &SessionResponse{}
+	headers := map[string]string{
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": `{"close": false}`,
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload_session/start", headers, bytes.NewReader(content), false)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+	return response, nil
+}
+
+func (c *HTTPClient) UploadChunk(ctx context.Context, sessionID string, content []byte, offset uint) error {
+	cursor := map[string]interface{}{
+		"session_id": sessionID,
+		"offset":     offset,
+	}
+	arg := map[string]interface{}{
+		"cursor": cursor,
+		"close":  false,
+	}
+	argJSON, err := json.Marshal(arg)
+	if err != nil {
+		return fmt.Errorf("error marshalling headers: %w", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": string(argJSON),
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload_session/append_v2", headers, bytes.NewReader(content), false)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
+func (c *HTTPClient) CloseSession(ctx context.Context, filepath, sessionid string, offset uint) (*UploadFileResponse, error) {
+	cursor := map[string]interface{}{
+		"session_id": sessionid,
+		"offset":     offset,
+	}
+	commit := map[string]interface{}{
+		"path": filepath,
+		"mode": "overwrite",
+		"mute": false,
+	}
+	finishArg := map[string]interface{}{
+		"cursor": cursor,
+		"commit": commit,
+	}
+	argJSON, err := json.Marshal(finishArg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling headers: %w", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type":    "application/octet-stream",
+		"Dropbox-API-Arg": string(argJSON),
+	}
+	response := &UploadFileResponse{}
+	resp, err := c.makeRequest(ctx, http.MethodPost, contentURL+"/files/upload_session/finish", headers, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+	return response, nil
+}
+
+func (c *HTTPClient) DeleteFile(ctx context.Context, filepath string) error {
+	req := struct {
+		Path string `json:"path"`
+	}{
+		Path: filepath,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("error marshalling request body: %w", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+	resp, err := c.makeRequest(ctx, http.MethodPost, apiURL+"/files/delete_v2", headers, bytes.NewReader(body), false)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
 //nolint:unparam // method may be used for non-POST in future
-func (c *HTTPClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody io.Reader) (*http.Response, error) {
+func (c *HTTPClient) makeRequest(ctx context.Context, method, url string, headers map[string]string, reqBody io.Reader, skipAuth bool) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request failed: %w", err)
+	}
+
+	if !skipAuth {
+		req.Header.Set("Authorization", "Bearer "+c.accessToken)
 	}
 
 	for header, value := range headers {

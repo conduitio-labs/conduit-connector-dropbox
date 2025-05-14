@@ -28,3 +28,20 @@ type Entry struct {
 	Size           uint64    `json:"size,omitempty"`
 	ContentHash    string    `json:"content_hash,omitempty"`
 }
+
+// UploadFileResponse represents the response returned by Dropbox after a successful file upload.
+// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-upload
+type UploadFileResponse struct {
+	ID          string `json:"id"`
+	ContentHash string `json:"content_hash"`
+	Name        string `json:"name"`
+	PathDisplay string `json:"path_display"`
+	Size        uint64 `json:"size"`
+}
+
+// SessionResponse contains the session ID returned when initiating an upload session.
+// This ID is used to upload large files in multiple parts.
+// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-upload_session-start
+type SessionResponse struct {
+	SessionID string `json:"session_id"`
+}
