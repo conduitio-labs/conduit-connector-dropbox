@@ -239,9 +239,9 @@ func TestSource_ReadN_ChunkedFile(t *testing.T) {
 
 	is.Equal(len(chunks), 5)
 	for i, chunk := range chunks {
-		is.Equal(chunk.Metadata["is_chunked"], "true")
-		is.Equal(chunk.Metadata["chunk_index"], fmt.Sprintf("%d", i+1))
-		is.Equal(chunk.Metadata["total_chunks"], "5")
+		is.Equal(chunk.Metadata[opencdc.MetadataFileChunked], "true")
+		is.Equal(chunk.Metadata[opencdc.MetadataFileChunkIndex], fmt.Sprintf("%d", i+1))
+		is.Equal(chunk.Metadata[opencdc.MetadataFileChunkCount], "5")
 		is.Equal(chunk.Metadata["file_path"], testFile.PathDisplay)
 		is.True(chunk.Metadata[opencdc.MetadataCollection] != "")
 	}
