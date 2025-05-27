@@ -70,7 +70,7 @@ func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int,
 				return i, fmt.Errorf("failed to delete file: %w", err)
 			}
 
-		case record.Metadata["is_chunked"] == "true":
+		case record.Metadata[opencdc.MetadataFileChunked] == "true":
 			err := d.uploadFileChunk(ctx, record)
 			if err != nil {
 				return i, fmt.Errorf("failed to upload file chunk: %w", err)
@@ -191,39 +191,39 @@ type metadata struct {
 func (d *Destination) extractMetadata(record opencdc.Record) (metadata, error) {
 	meta := metadata{}
 	var ok bool
-	chunked, ok := record.Metadata["is_chunked"]
+	chunked, ok := record.Metadata[opencdc.MetadataFileChunked]
 	if ok && chunked == "true" {
-		chunkIndex, ok := record.Metadata["chunk_index"]
+		chunkIndex, ok := record.Metadata[opencdc.MetadataFileChunkIndex]
 		if !ok {
-			return metadata{}, NewInvalidChunkError("chunk_index not found")
+			return metadata{}, NewInvalidChunkError("chunk index not found")
 		}
 		var err error
 		meta.index, err = strconv.ParseInt(chunkIndex, 10, 64)
 		if err != nil {
-			return metadata{}, fmt.Errorf("failed to parse chunk_index: %w", err)
+			return metadata{}, fmt.Errorf("failed to parse chunk index: %w", err)
 		}
-		total, ok := record.Metadata["total_chunks"]
+		total, ok := record.Metadata[opencdc.MetadataFileChunkCount]
 		if !ok {
-			return metadata{}, NewInvalidChunkError("total_chunk not found")
+			return metadata{}, NewInvalidChunkError("total chunk not found")
 		}
 		meta.totalChunks, err = strconv.ParseInt(total, 10, 64)
 		if err != nil {
-			return metadata{}, fmt.Errorf("failed to parse total_chunks: %w", err)
+			return metadata{}, fmt.Errorf("failed to parse total chunks: %w", err)
 		}
 	}
 
-	meta.hash, ok = record.Metadata["hash"]
+	meta.hash, ok = record.Metadata[opencdc.MetadataFileHash]
 	if !ok {
 		return metadata{}, NewInvalidChunkError("hash not found")
 	}
-	fileSize, ok := record.Metadata["file_size"]
+	fileSize, ok := record.Metadata[opencdc.MetadataFileSize]
 	if !ok {
-		return metadata{}, NewInvalidChunkError("file_size not found")
+		return metadata{}, NewInvalidChunkError("file size not found")
 	}
 	var err error
 	meta.filesize, err = strconv.ParseUint(fileSize, 10, 64)
 	if err != nil {
-		return metadata{}, fmt.Errorf("failed to parse file_size: %w", err)
+		return metadata{}, fmt.Errorf("failed to parse file size: %w", err)
 	}
 
 	return meta, nil
@@ -236,7 +236,7 @@ func (d *Destination) getFilepath(r opencdc.Record) (string, error) {
 		directory += val
 	}
 
-	filename, ok := r.Metadata["filename"]
+	filename, ok := r.Metadata[opencdc.MetadataFileName]
 	if !ok {
 		return "", ErrMissingFilename
 	}
