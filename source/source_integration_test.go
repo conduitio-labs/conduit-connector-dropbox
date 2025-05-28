@@ -66,7 +66,6 @@ func TestSource_ReadN(t *testing.T) {
 				Path:  "/conduit-connector-dropbox-test",
 			},
 			FileChunkSizeBytes: 1024,
-			Limit:              10,
 		},
 	}
 	defer func() {

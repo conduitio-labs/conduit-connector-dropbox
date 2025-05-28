@@ -25,9 +25,12 @@ import (
 	config "github.com/conduitio-labs/conduit-connector-dropbox/config"
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
 	"github.com/conduitio/conduit-commons/opencdc"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/matryer/is"
 	"github.com/stretchr/testify/mock"
 )
+
+var batchSize = 10
 
 func TestTeardownSource_NoOpen(t *testing.T) {
 	is := is.New(t)
@@ -47,6 +50,11 @@ func TestSource_Open(t *testing.T) {
 	}()
 
 	con.config = Config{
+		DefaultSourceMiddleware: sdk.DefaultSourceMiddleware{
+			SourceWithBatch: sdk.SourceWithBatch{
+				BatchSize: &batchSize,
+			},
+		},
 		Config: config.Config{
 			Token: "test-token",
 		},
@@ -114,6 +122,11 @@ func TestSource_ReadN_Success(t *testing.T) {
 	src := &Source{
 		client: m,
 		config: Config{
+			DefaultSourceMiddleware: sdk.DefaultSourceMiddleware{
+				SourceWithBatch: sdk.SourceWithBatch{
+					BatchSize: &batchSize,
+				},
+			},
 			Config: config.Config{
 				Token: "test-token",
 			},
@@ -200,6 +213,11 @@ func TestSource_ReadN_ChunkedFile(t *testing.T) {
 	src := &Source{
 		client: m,
 		config: Config{
+			DefaultSourceMiddleware: sdk.DefaultSourceMiddleware{
+				SourceWithBatch: sdk.SourceWithBatch{
+					BatchSize: &batchSize,
+				},
+			},
 			Config: config.Config{
 				Token: "test-token",
 			},
@@ -221,9 +239,9 @@ func TestSource_ReadN_ChunkedFile(t *testing.T) {
 
 	is.Equal(len(chunks), 5)
 	for i, chunk := range chunks {
-		is.Equal(chunk.Metadata["is_chunked"], "true")
-		is.Equal(chunk.Metadata["chunk_index"], fmt.Sprintf("%d", i+1))
-		is.Equal(chunk.Metadata["total_chunks"], "5")
+		is.Equal(chunk.Metadata[opencdc.MetadataFileChunked], "true")
+		is.Equal(chunk.Metadata[opencdc.MetadataFileChunkIndex], fmt.Sprintf("%d", i+1))
+		is.Equal(chunk.Metadata[opencdc.MetadataFileChunkCount], "5")
 		is.Equal(chunk.Metadata["file_path"], testFile.PathDisplay)
 		is.True(chunk.Metadata[opencdc.MetadataCollection] != "")
 	}

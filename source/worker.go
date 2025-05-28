@@ -130,7 +130,7 @@ func (w *Worker) process(ctx context.Context) error {
 
 // initialSync performs the first complete sync of the target path.
 func (w *Worker) initialSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, w.config.Limit)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, *w.config.BatchSize)
 	if err != nil {
 		return fmt.Errorf("list failed: %w", err)
 	}
@@ -147,7 +147,7 @@ func (w *Worker) initialSync(ctx context.Context) error {
 
 // reSync performs a full resync when the cursor expires.
 func (w *Worker) reSync(ctx context.Context) error {
-	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, w.config.Limit)
+	entries, cursor, hasMore, err := w.client.List(ctx, w.config.Path, false, *w.config.BatchSize)
 	if err != nil {
 		return fmt.Errorf("resync list failed: %w", err)
 	}
@@ -214,7 +214,7 @@ func (w *Worker) processDeletedFile(ctx context.Context, entry dropbox.Entry) er
 	}
 
 	metadata := opencdc.Metadata{
-		"filename":                 entry.Name,
+		opencdc.MetadataFileName:   entry.Name,
 		"file_path":                entry.PathDisplay,
 		opencdc.MetadataCollection: filepath.Dir(entry.PathDisplay),
 	}
@@ -325,15 +325,15 @@ func (w *Worker) createChunkedRecord(entry dropbox.Entry, chunkIdx, totalChunks 
 	}
 
 	metadata := opencdc.Metadata{
-		"filename":                 entry.Name,
-		"file_id":                  entry.ID,
-		"file_path":                entry.PathDisplay,
-		opencdc.MetadataCollection: filepath.Dir(entry.PathDisplay),
-		"file_size":                fmt.Sprintf("%d", entry.Size),
-		"hash":                     entry.ContentHash,
-		"chunk_index":              fmt.Sprintf("%d", chunkIdx),
-		"total_chunks":             fmt.Sprintf("%d", totalChunks),
-		"is_chunked":               "true",
+		opencdc.MetadataFileName:       entry.Name,
+		"file_id":                      entry.ID,
+		"file_path":                    entry.PathDisplay,
+		opencdc.MetadataCollection:     filepath.Dir(entry.PathDisplay),
+		opencdc.MetadataFileSize:       fmt.Sprintf("%d", entry.Size),
+		opencdc.MetadataFileHash:       entry.ContentHash,
+		opencdc.MetadataFileChunkIndex: fmt.Sprintf("%d", chunkIdx),
+		opencdc.MetadataFileChunkCount: fmt.Sprintf("%d", totalChunks),
+		opencdc.MetadataFileChunked:    "true",
 	}
 
 	return sdk.Util.Source.NewRecordCreate(
@@ -355,12 +355,12 @@ func (w *Worker) createRecord(entry dropbox.Entry, data []byte) (opencdc.Record,
 	}
 
 	metadata := opencdc.Metadata{
-		"filename":                 entry.Name,
+		opencdc.MetadataFileName:   entry.Name,
 		"file_id":                  entry.ID,
 		"file_path":                entry.PathDisplay,
 		opencdc.MetadataCollection: filepath.Dir(entry.PathDisplay),
-		"file_size":                fmt.Sprintf("%d", entry.Size),
-		"hash":                     entry.ContentHash,
+		opencdc.MetadataFileSize:   fmt.Sprintf("%d", entry.Size),
+		opencdc.MetadataFileHash:   entry.ContentHash,
 	}
 
 	return sdk.Util.Source.NewRecordCreate(

@@ -18,10 +18,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
-	"github.com/conduitio-labs/conduit-connector-dropbox/config"
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
+	"github.com/conduitio/conduit-commons/lang"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
@@ -41,24 +40,17 @@ type Source struct {
 	workersWg *sync.WaitGroup
 }
 
-type Config struct {
-	sdk.DefaultSourceMiddleware
-	config.Config
-
-	// Timeout for Dropbox longpolling requests.
-	LongpollTimeout time.Duration `json:"longpollTimeout" default:"30s"`
-	// Size of a file chunk in bytes to split large files, maximum is 4MB.
-	FileChunkSizeBytes uint64 `json:"fileChunkSizeBytes" default:"3145728"`
-	// Maximum number of retry attempts.
-	Retries int `json:"retries" default:"0"`
-	// Delay between retry attempts.
-	RetryDelay time.Duration `json:"retryDelay" default:"10s"`
-	// Maximum number of entries to fetch in a single list_folder request.
-	Limit int `json:"limit" default:"1000"`
-}
-
 func NewSource() sdk.Source {
-	return sdk.SourceWithMiddleware(&Source{})
+	return sdk.SourceWithMiddleware(&Source{
+		config: Config{
+			DefaultSourceMiddleware: sdk.DefaultSourceMiddleware{
+				// disable schema extraction by default, as the source produces raw payload data
+				SourceWithSchemaExtraction: sdk.SourceWithSchemaExtraction{
+					PayloadEnabled: lang.Ptr(false),
+				},
+			},
+		},
+	})
 }
 
 func (s *Source) Config() sdk.SourceConfig {

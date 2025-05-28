@@ -81,8 +81,9 @@ func TestDestination_WriteSuccess(t *testing.T) {
 				},
 				Metadata: map[string]string{
 					opencdc.MetadataCollection: "/test",
-					"filename":                 "file.txt",
-					"hash":                     "mock-hash",
+					opencdc.MetadataFileName:   "file.txt",
+					opencdc.MetadataFileHash:   "mock-hash",
+					opencdc.MetadataFileSize:   "12",
 				},
 			},
 		}
@@ -90,6 +91,7 @@ func TestDestination_WriteSuccess(t *testing.T) {
 		m.On("UploadFile", ctx, "/test/file.txt", []byte("test content")).
 			Return(&dropbox.UploadFileResponse{
 				ContentHash: "mock-hash",
+				Size:        12,
 			}, nil)
 
 		n, err := dest.Write(ctx, records)
@@ -109,15 +111,15 @@ func TestDestination_WriteSuccess(t *testing.T) {
 					After: opencdc.RawData([]byte("chunk1")),
 				},
 				Metadata: map[string]string{
-					"is_chunked":               "true",
-					"chunk_index":              "1",
-					"total_chunks":             "2",
-					"filename":                 "chunked.txt",
-					"file_path":                "/test/chunked.txt",
-					"hash":                     "chunked-hash",
-					"file_size":                "12",
-					"file_id":                  "chunked-file",
-					opencdc.MetadataCollection: "/test",
+					opencdc.MetadataFileChunked:    "true",
+					opencdc.MetadataFileChunkIndex: "1",
+					opencdc.MetadataFileChunkCount: "2",
+					opencdc.MetadataFileName:       "chunked.txt",
+					"file_path":                    "/test/chunked.txt",
+					opencdc.MetadataFileHash:       "chunked-hash",
+					opencdc.MetadataFileSize:       "12",
+					"file_id":                      "chunked-file",
+					opencdc.MetadataCollection:     "/test",
 				},
 			},
 			// Second chunk
@@ -127,15 +129,15 @@ func TestDestination_WriteSuccess(t *testing.T) {
 					After: opencdc.RawData([]byte("chunk2")),
 				},
 				Metadata: map[string]string{
-					"is_chunked":               "true",
-					"chunk_index":              "2",
-					"total_chunks":             "2",
-					"filename":                 "chunked.txt",
-					"file_path":                "/test/chunked.txt",
-					"hash":                     "chunked-hash",
-					"file_size":                "12",
-					"file_id":                  "chunked-file",
-					opencdc.MetadataCollection: "/test",
+					opencdc.MetadataFileChunked:    "true",
+					opencdc.MetadataFileChunkIndex: "2",
+					opencdc.MetadataFileChunkCount: "2",
+					opencdc.MetadataFileName:       "chunked.txt",
+					"file_path":                    "/test/chunked.txt",
+					opencdc.MetadataFileHash:       "chunked-hash",
+					opencdc.MetadataFileSize:       "12",
+					"file_id":                      "chunked-file",
+					opencdc.MetadataCollection:     "/test",
 				},
 			},
 		}
@@ -168,7 +170,7 @@ func TestDestination_WriteSuccess(t *testing.T) {
 				Operation: opencdc.OperationDelete,
 				Metadata: map[string]string{
 					opencdc.MetadataCollection: "/test",
-					"filename":                 "file.txt",
+					opencdc.MetadataFileName:   "file.txt",
 				},
 			},
 		}

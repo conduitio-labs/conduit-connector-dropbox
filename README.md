@@ -26,15 +26,15 @@ falls back to a fresh scan skipping already-processed files based on the
 
 Each record have following metadata fields to support downstream file reassembly:
 
-* `filename`: Name of the file with extension.
+* `opencdc.file.name`: Name of the file with extension.
 * `file_id`: Unique Dropbox file ID.
 * `file_path`: Full path of the file in Dropbox (e.g., `/Photos/Vacation/image.jpg`).
 * `opencdc.collection`: Path to the parent directory containing the file (e.g., `/Photos/Vacation`).
-* `file_size`: Integer size of the file.
-* `is_chunked`: "true" if the file was split into multiple chunks; otherwise false or not present.
-* `chunk_index`: Index of the current chunk (starting from 1) – only present for chunks.
-* `total_chunks`: Total number of chunks – only present for chunked files.
-* `hash`: A hash of the file content. This field can be used to verify data integrity.
+* `opencdc.file.size`: Integer size of the file.
+* `opencdc.file.chunked`: "true" if the file was split into multiple chunks; otherwise false or not present.
+* `opencdc.file.chunk.index`: Index of the current chunk (starting from 1) – only present for chunks.
+* `opencdc.file.chunk.count`: Total number of chunks – only present for chunked files.
+* `opencdc.file.hash`: A hash of the file content. This field can be used to verify data integrity.
 
 ## Destination
 
@@ -43,13 +43,13 @@ resource via Conduit.
 
 Each record should have following metadata fields:
 
-* `filename`: Name of the file with extension.
+* `opencdc.file.name`: Name of the file with extension.
 * `opencdc.collection`: (Optional) Target directory path. Defaults to root `/` if not specified.
-* `file_size`: Integer size of the file.
-* `is_chunked`: "true" if the file was split into multiple chunks; otherwise false or not present.
-* `chunk_index`: Index of the current chunk (1-based index, required only for chunked files).
-* `total_chunks`: Total number of chunks (required only for chunked files).
-* `hash`: A hash to uniquely identify the file.
+* `opencdc.file.size`: Integer size of the file.
+* `opencdc.file.chunked`: "true" if the file was split into multiple chunks; otherwise false or not present.
+* `opencdc.file.chunk.index`: Index of the current chunk (1-based index, required only for chunked files).
+* `opencdc.file.chunk.count`: Total number of chunks (required only for chunked files).
+* `opencdc.file.hash`: A hash to uniquely identify the file.
 <!-- /readmegen:description -->
 
 ## Source Configuration Parameters
@@ -72,10 +72,6 @@ pipelines:
           # Type: int
           # Required: no
           fileChunkSizeBytes: "3145728"
-          # Maximum number of entries to fetch in a single list_folder request.
-          # Type: int
-          # Required: no
-          limit: "1000"
           # Timeout for Dropbox longpolling requests.
           # Type: duration
           # Required: no
@@ -126,7 +122,7 @@ pipelines:
           # Whether to extract and encode the record payload with a schema.
           # Type: bool
           # Required: no
-          sdk.schema.extract.payload.enabled: "true"
+          sdk.schema.extract.payload.enabled: "false"
           # The subject of the payload schema. If the record metadata contains
           # the field "opencdc.collection" it is prepended to the subject name
           # and separated with a dot.
@@ -244,3 +240,5 @@ The release is done in two steps:
 
 - [ ] Item A
 - [ ] Item B
+
+![scarf pixel](https://static.scarf.sh/a.png?x-pxid=0944a395-adda-4265-b576-639a1592d25c)
