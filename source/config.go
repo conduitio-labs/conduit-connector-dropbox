@@ -32,7 +32,7 @@ type Config struct {
 	// Timeout for Dropbox longpolling requests.
 	LongpollTimeout time.Duration `json:"longpollTimeout" default:"30s"`
 	// Size of a file chunk in bytes to split large files, maximum is 4MB.
-	FileChunkSizeBytes uint64 `json:"fileChunkSizeBytes" default:"3145728"`
+	FileChunkSizeBytes uint64 `json:"fileChunkSizeBytes" default:"4194304"`
 	// Maximum number of retry attempts.
 	Retries int `json:"retries" default:"0"`
 	// Delay between retry attempts.

@@ -71,7 +71,7 @@ pipelines:
           # Size of a file chunk in bytes to split large files, maximum is 4MB.
           # Type: int
           # Required: no
-          fileChunkSizeBytes: "3145728"
+          fileChunkSizeBytes: "4194304"
           # Timeout for Dropbox longpolling requests.
           # Type: duration
           # Required: no

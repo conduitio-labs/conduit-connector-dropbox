@@ -97,7 +97,7 @@ func (d *Destination) deleteFile(ctx context.Context, r opencdc.Record) error {
 		return err
 	}
 
-	err = d.client.DeleteFile(ctx, filepath)
+	err = d.client.Delete(ctx, filepath)
 	if err != nil {
 		return fmt.Errorf("error deleting file: %w", err)
 	}

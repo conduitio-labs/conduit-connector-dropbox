@@ -144,17 +144,17 @@ func (_c *MockFoldersClient_CreateSession_Call) RunAndReturn(run func(context.Co
 	return _c
 }
 
-// DeleteFile provides a mock function with given fields: ctx, filepath
-func (_m *MockFoldersClient) DeleteFile(ctx context.Context, filepath string) error {
-	ret := _m.Called(ctx, filepath)
+// Delete provides a mock function with given fields: ctx, path
+func (_m *MockFoldersClient) Delete(ctx context.Context, path string) error {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
-		panic("no return value specified for DeleteFile")
+		panic("no return value specified for Delete")
 	}
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = rf(ctx, filepath)
+		r0 = rf(ctx, path)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -162,31 +162,31 @@ func (_m *MockFoldersClient) DeleteFile(ctx context.Context, filepath string) er
 	return r0
 }
 
-// MockFoldersClient_DeleteFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteFile'
-type MockFoldersClient_DeleteFile_Call struct {
+// MockFoldersClient_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type MockFoldersClient_Delete_Call struct {
 	*mock.Call
 }
 
-// DeleteFile is a helper method to define mock.On call
+// Delete is a helper method to define mock.On call
 //   - ctx context.Context
-//   - filepath string
-func (_e *MockFoldersClient_Expecter) DeleteFile(ctx interface{}, filepath interface{}) *MockFoldersClient_DeleteFile_Call {
-	return &MockFoldersClient_DeleteFile_Call{Call: _e.mock.On("DeleteFile", ctx, filepath)}
+//   - path string
+func (_e *MockFoldersClient_Expecter) Delete(ctx interface{}, path interface{}) *MockFoldersClient_Delete_Call {
+	return &MockFoldersClient_Delete_Call{Call: _e.mock.On("Delete", ctx, path)}
 }
 
-func (_c *MockFoldersClient_DeleteFile_Call) Run(run func(ctx context.Context, filepath string)) *MockFoldersClient_DeleteFile_Call {
+func (_c *MockFoldersClient_Delete_Call) Run(run func(ctx context.Context, path string)) *MockFoldersClient_Delete_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(context.Context), args[1].(string))
 	})
 	return _c
 }
 
-func (_c *MockFoldersClient_DeleteFile_Call) Return(_a0 error) *MockFoldersClient_DeleteFile_Call {
+func (_c *MockFoldersClient_Delete_Call) Return(_a0 error) *MockFoldersClient_Delete_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockFoldersClient_DeleteFile_Call) RunAndReturn(run func(context.Context, string) error) *MockFoldersClient_DeleteFile_Call {
+func (_c *MockFoldersClient_Delete_Call) RunAndReturn(run func(context.Context, string) error) *MockFoldersClient_Delete_Call {
 	_c.Call.Return(run)
 	return _c
 }

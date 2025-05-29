@@ -50,7 +50,7 @@ func TestDestination_Open(t *testing.T) {
 	is.NoErr(err)
 }
 
-func TestDestination_Write(t *testing.T) {
+func TestDestination_WriteSuccess(t *testing.T) {
 	is := is.New(t)
 	ctx := context.Background()
 
@@ -175,7 +175,7 @@ func TestDestination_Write(t *testing.T) {
 			},
 		}
 
-		m.On("DeleteFile", ctx, "/test/file.txt").
+		m.On("Delete", ctx, "/test/file.txt").
 			Return(nil)
 
 		n, err := dest.Write(ctx, records)

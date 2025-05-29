@@ -58,7 +58,7 @@ type FoldersClient interface {
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-upload_session-finish
 	CloseSession(ctx context.Context, filepath, sessionID string, offset uint) (*UploadFileResponse, error)
 
-	// DeleteFile permanently removes a file or folder from Dropbox.
+	// Delete permanently removes a file or folder from Dropbox.
 	// Docs: https://www.dropbox.com/developers/documentation/http/documentation#files-delete
-	DeleteFile(ctx context.Context, filepath string) error
+	Delete(ctx context.Context, path string) error
 }
