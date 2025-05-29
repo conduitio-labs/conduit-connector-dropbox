@@ -17,6 +17,7 @@ package source
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -25,12 +26,13 @@ import (
 	dropbox "github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/testutil"
 	"github.com/conduitio/conduit-commons/opencdc"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/matryer/is"
 )
 
 const (
-	testFolderPath = "/conduit-connector-dropbox-test"
-	envToken       = "DROPBOX_TOKEN"
+	baseTestPath = "/conduit-connector-dropbox-test"
+	envToken     = "DROPBOX_TOKEN"
 )
 
 func TestSource_ReadN(t *testing.T) {
@@ -45,11 +47,7 @@ func TestSource_ReadN(t *testing.T) {
 	client, err := dropbox.NewHTTPClient(token, 30*time.Second)
 	is.NoErr(err)
 
-	// Cleanup before starting
-	err = testutil.CleanupTestFiles(ctx, client, testFolderPath)
-	if err != nil {
-		t.Logf("warning: %v", err)
-	}
+	testFolderPath := fmt.Sprintf("%s/integration_test/%d", baseTestPath, time.Now().UnixNano())
 
 	// Create test files
 	file1Content := []byte("test file 1 content")
@@ -59,16 +57,27 @@ func TestSource_ReadN(t *testing.T) {
 	_, err = client.UploadFile(ctx, testFolderPath+"/file2.txt", file2Content)
 	is.NoErr(err)
 
+	batchSize := 5
 	source := &Source{
 		config: Config{
+			DefaultSourceMiddleware: sdk.DefaultSourceMiddleware{
+				SourceWithBatch: sdk.SourceWithBatch{
+					BatchSize: &batchSize,
+				},
+			},
 			Config: config.Config{
 				Token: token,
-				Path:  "/conduit-connector-dropbox-test",
+				Path:  testFolderPath,
 			},
 			FileChunkSizeBytes: 1024,
 		},
 	}
 	defer func() {
+		err = testutil.CleanupTestFolder(ctx, client, testFolderPath)
+		if err != nil {
+			t.Logf("warning: %v", err)
+		}
+
 		err := source.Teardown(ctx)
 		is.NoErr(err)
 	}()
@@ -95,16 +104,16 @@ func TestSource_ReadN(t *testing.T) {
 
 	// First chunk
 	is.Equal(len(chunks[0].Payload.After.Bytes()), 1024)
-	is.Equal(chunks[0].Metadata["is_chunked"], "true")
-	is.Equal(chunks[0].Metadata["chunk_index"], "1")
-	is.Equal(chunks[0].Metadata["total_chunks"], "2")
+	is.Equal(chunks[0].Metadata[opencdc.MetadataFileChunked], "true")
+	is.Equal(chunks[0].Metadata[opencdc.MetadataFileChunkIndex], "1")
+	is.Equal(chunks[0].Metadata[opencdc.MetadataFileChunkCount], "2")
 	is.Equal(chunks[0].Metadata["file_path"], testFolderPath+"/file2.txt")
 
 	// Second chunk
 	is.Equal(len(chunks[1].Payload.After.Bytes()), 476) // 1500 - 1024
-	is.Equal(chunks[1].Metadata["is_chunked"], "true")
-	is.Equal(chunks[1].Metadata["chunk_index"], "2")
-	is.Equal(chunks[1].Metadata["total_chunks"], "2")
+	is.Equal(chunks[1].Metadata[opencdc.MetadataFileChunked], "true")
+	is.Equal(chunks[1].Metadata[opencdc.MetadataFileChunkIndex], "2")
+	is.Equal(chunks[1].Metadata[opencdc.MetadataFileChunkCount], "2")
 	is.Equal(chunks[1].Metadata["file_path"], testFolderPath+"/file2.txt")
 
 	// Combine chunks to verify content matches original

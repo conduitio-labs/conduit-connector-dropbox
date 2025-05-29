@@ -21,17 +21,10 @@ import (
 	"github.com/conduitio-labs/conduit-connector-dropbox/pkg/dropbox"
 )
 
-func CleanupTestFiles(ctx context.Context, client dropbox.FoldersClient, path string) error {
-	entries, _, _, err := client.List(ctx, path, false, 100)
+func CleanupTestFolder(ctx context.Context, client dropbox.FoldersClient, path string) error {
+	err := client.Delete(ctx, path)
 	if err != nil {
-		return fmt.Errorf("failed to list test folder for cleanup: %w", err)
-	}
-
-	for _, entry := range entries {
-		err := client.DeleteFile(ctx, entry.PathDisplay)
-		if err != nil {
-			return fmt.Errorf("failed to delete test file %s: %w", entry.PathDisplay, err)
-		}
+		return fmt.Errorf("failed to delete test folder %s: %w", path, err)
 	}
 
 	return nil

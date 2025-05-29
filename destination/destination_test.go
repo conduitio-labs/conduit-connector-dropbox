@@ -175,7 +175,7 @@ func TestDestination_WriteSuccess(t *testing.T) {
 			},
 		}
 
-		m.On("DeleteFile", ctx, "/test/file.txt").
+		m.On("Delete", ctx, "/test/file.txt").
 			Return(nil)
 
 		n, err := dest.Write(ctx, records)

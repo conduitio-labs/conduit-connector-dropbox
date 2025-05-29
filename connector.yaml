@@ -64,7 +64,7 @@ specification:
       - name: fileChunkSizeBytes
         description: Size of a file chunk in bytes to split large files, maximum is 4MB.
         type: int
-        default: "3145728"
+        default: "4194304"
         validations: []
       - name: longpollTimeout
         description: Timeout for Dropbox longpolling requests.

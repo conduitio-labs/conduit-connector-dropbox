@@ -17,9 +17,11 @@ package destination
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,8 +33,8 @@ import (
 )
 
 const (
-	testFolderPath = "/conduit-connector-dropbox-test"
-	envToken       = "DROPBOX_TOKEN"
+	baseTestPath = "/conduit-connector-dropbox-test"
+	envToken     = "DROPBOX_TOKEN"
 )
 
 func TestDestination_Write(t *testing.T) {
@@ -47,11 +49,7 @@ func TestDestination_Write(t *testing.T) {
 	client, err := dropbox.NewHTTPClient(token, 30*time.Second)
 	is.NoErr(err)
 
-	// Cleanup before starting
-	err = testutil.CleanupTestFiles(ctx, client, testFolderPath)
-	if err != nil {
-		t.Logf("warning: %v", err)
-	}
+	testFolderPath := fmt.Sprintf("%s/integration_test/%d", baseTestPath, time.Now().UnixNano())
 
 	dest := &Destination{
 		config: Config{
@@ -63,7 +61,12 @@ func TestDestination_Write(t *testing.T) {
 		client: client,
 	}
 	defer func() {
-		err := dest.Teardown(ctx)
+		err := testutil.CleanupTestFolder(ctx, client, testFolderPath)
+		if err != nil {
+			t.Logf("warning: %v", err)
+		}
+
+		err = dest.Teardown(ctx)
 		is.NoErr(err)
 	}()
 
@@ -80,9 +83,9 @@ func TestDestination_Write(t *testing.T) {
 				After: opencdc.RawData(fileContent),
 			},
 			Metadata: map[string]string{
-				opencdc.MetadataCollection: "/uploads",
-				"filename":                 "single_file.txt",
-				"hash":                     "d8a411e8f8643821bed189e627ff57151918aa554c00c10b31c693ab2dded273",
+				opencdc.MetadataFileSize: strconv.Itoa(len(fileContent)),
+				opencdc.MetadataFileName: "single_file.txt",
+				opencdc.MetadataFileHash: "d8a411e8f8643821bed189e627ff57151918aa554c00c10b31c693ab2dded273",
 			},
 		}
 
@@ -91,7 +94,7 @@ func TestDestination_Write(t *testing.T) {
 		is.Equal(n, 1)
 
 		// Verify file was uploaded
-		reader, err := client.DownloadRange(ctx, testFolderPath+"/uploads/single_file.txt", 0, 0)
+		reader, err := client.DownloadRange(ctx, testFolderPath+"/single_file.txt", 0, 0)
 		is.NoErr(err)
 		defer reader.Close()
 
@@ -119,13 +122,12 @@ func TestDestination_Write(t *testing.T) {
 					After: opencdc.RawData(chunk),
 				},
 				Metadata: map[string]string{
-					opencdc.MetadataCollection: "/uploads",
-					"filename":                 "chunked_file.txt",
-					"hash":                     "2fc8ddec4e71269c71f2fb08b062172bfa4699b979c7a16d2a8dcc0dab488214",
-					"is_chunked":               "true",
-					"chunk_index":              strconv.Itoa(i),
-					"total_chunks":             strconv.Itoa(totalChunks),
-					"file_size":                strconv.Itoa(len(fileContent)),
+					opencdc.MetadataFileName:       "chunked_file.txt",
+					opencdc.MetadataFileHash:       "2fc8ddec4e71269c71f2fb08b062172bfa4699b979c7a16d2a8dcc0dab488214",
+					opencdc.MetadataFileChunked:    "true",
+					opencdc.MetadataFileChunkIndex: strconv.Itoa(i),
+					opencdc.MetadataFileChunkCount: strconv.Itoa(totalChunks),
+					opencdc.MetadataFileSize:       strconv.Itoa(len(fileContent)),
 				},
 			}
 
@@ -135,7 +137,7 @@ func TestDestination_Write(t *testing.T) {
 		}
 
 		// Verify complete file was uploaded
-		reader, err := client.DownloadRange(ctx, testFolderPath+"/uploads/chunked_file.txt", 0, 0)
+		reader, err := client.DownloadRange(ctx, testFolderPath+"/chunked_file.txt", 0, 0)
 		is.NoErr(err)
 		defer reader.Close()
 
@@ -149,7 +151,7 @@ func TestDestination_Write(t *testing.T) {
 
 		// Upload a file to delete
 		fileContent := []byte("file to delete")
-		filePath := testFolderPath + "/uploads/to_delete.txt"
+		filePath := testFolderPath + "/to_delete.txt"
 		_, err := client.UploadFile(ctx, filePath, fileContent)
 		is.NoErr(err)
 
@@ -161,8 +163,7 @@ func TestDestination_Write(t *testing.T) {
 		record := opencdc.Record{
 			Operation: opencdc.OperationDelete,
 			Metadata: map[string]string{
-				opencdc.MetadataCollection: testFolderPath + "/uploads",
-				"filename":                 "to_delete.txt",
+				opencdc.MetadataFileName: "to_delete.txt",
 			},
 		}
 
@@ -173,6 +174,7 @@ func TestDestination_Write(t *testing.T) {
 		// Verify file was deleted
 		_, err = client.DownloadRange(ctx, filePath, 0, 0)
 		is.True(err != nil) // Expect error since file should be gone
+		strings.Contains(err.Error(), "dropbox API error: path/not_found/")
 	})
 
 	t.Run("InvalidChunkMetadata", func(t *testing.T) {
@@ -184,8 +186,8 @@ func TestDestination_Write(t *testing.T) {
 				After: opencdc.RawData([]byte("chunk")),
 			},
 			Metadata: map[string]string{
-				"is_chunked":  "true",
-				"chunk_index": "1",
+				opencdc.MetadataFileChunked:    "true",
+				opencdc.MetadataFileChunkIndex: "1",
 				// Missing total_chunks and other required fields
 			},
 		}

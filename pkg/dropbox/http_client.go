@@ -325,7 +325,7 @@ func (c *HTTPClient) CloseSession(ctx context.Context, filepath, sessionid strin
 	return response, nil
 }
 
-func (c *HTTPClient) DeleteFile(ctx context.Context, filepath string) error {
+func (c *HTTPClient) Delete(ctx context.Context, filepath string) error {
 	req := struct {
 		Path string `json:"path"`
 	}{
