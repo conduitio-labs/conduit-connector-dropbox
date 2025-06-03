@@ -69,7 +69,11 @@ specification:
     * `opencdc.file.chunk.index`: Index of the current chunk (1-based index, required only for chunked files).
     * `opencdc.file.chunk.count`: Total number of chunks (required only for chunked files).
     * `opencdc.file.hash`: A hash to uniquely identify the file.
-  version: v0.1.0
+    
+    ### Creating a token
+
+    The steps for creating a token are described [here](#creating-a-token).
+  version: v0.1.1
   author: Meroxa, Inc.
   source:
     parameters:

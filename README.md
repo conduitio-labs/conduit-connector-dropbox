@@ -69,6 +69,7 @@ Each record should have following metadata fields:
 * `opencdc.file.chunk.index`: Index of the current chunk (1-based index, required only for chunked files).
 * `opencdc.file.chunk.count`: Total number of chunks (required only for chunked files).
 * `opencdc.file.hash`: A hash to uniquely identify the file.
+
 <!-- /readmegen:description -->
 
 ## Source Configuration Parameters
