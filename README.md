@@ -70,6 +70,9 @@ Each record should have following metadata fields:
 * `opencdc.file.chunk.count`: Total number of chunks (required only for chunked files).
 * `opencdc.file.hash`: A hash to uniquely identify the file.
 
+### Creating a token
+
+The steps for creating a token are described [here](#creating-a-token).
 <!-- /readmegen:description -->
 
 ## Source Configuration Parameters
