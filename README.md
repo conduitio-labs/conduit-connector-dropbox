@@ -82,6 +82,7 @@ The steps for creating a token are described [here](#creating-a-token).
 version: 2.2
 pipelines:
   - id: example
+    type: source
     status: running
     connectors:
       - id: example
@@ -166,6 +167,7 @@ pipelines:
 version: 2.2
 pipelines:
   - id: example
+    type: destination
     status: running
     connectors:
       - id: example
