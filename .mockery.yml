@@ -1,4 +1,6 @@
 ---
+resolve-type-alias: False
+issue-845-fix: True
 with-expecter: true
 inpackage: true
 disable-version-string: true

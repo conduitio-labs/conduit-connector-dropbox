@@ -30,7 +30,7 @@ type Destination struct {
 
 	config Config
 	client dropbox.FoldersClient
-	// sessions stores the active sessions for chunk uploads
+	// sessions store the active sessions for chunk uploads
 	session map[string]cursor
 }
 

@@ -36,6 +36,26 @@ Each record have following metadata fields to support downstream file reassembly
 * `opencdc.file.chunk.count`: Total number of chunks – only present for chunked files.
 * `opencdc.file.hash`: A hash of the file content. This field can be used to verify data integrity.
 
+
+### Creating a token
+  
+  A token can be created by creating a new Dropbox app. To do so, follow the steps
+outlined below:
+  
+  1. Go to https://www.dropbox.com/developers/apps/create.
+  2. In "Choose an API," choose "Scoped access."
+  3. In "Choose the type of access you need," choose "App folder" or "Full
+  Dropbox," depending on whether the connector will access a single folder or
+  any folder in a Dropbox account.
+  4. In "Name your app," enter the name of your app (e.g. "ConduitConnectorProd").
+  5. Click "Create app."
+  6. Once the app has been created, you'll be redirected to the app's settings.
+  7. Go to "Permissions."
+  8. Select the following permissions:
+    - `files.metadata.read`
+    - `files.content.write`
+    - `files.content.read`
+
 ## Destination
 
 A destination connector pushes data from upstream resources to an external
@@ -50,6 +70,10 @@ Each record should have following metadata fields:
 * `opencdc.file.chunk.index`: Index of the current chunk (1-based index, required only for chunked files).
 * `opencdc.file.chunk.count`: Total number of chunks (required only for chunked files).
 * `opencdc.file.hash`: A hash to uniquely identify the file.
+
+### Creating a token
+
+The steps for creating a token for a destination connector are the same as the ones for the source.
 <!-- /readmegen:description -->
 
 ## Source Configuration Parameters
