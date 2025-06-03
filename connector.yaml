@@ -50,7 +50,7 @@ specification:
     * `opencdc.file.chunk.index`: Index of the current chunk (1-based index, required only for chunked files).
     * `opencdc.file.chunk.count`: Total number of chunks (required only for chunked files).
     * `opencdc.file.hash`: A hash to uniquely identify the file.
-  version: v0.0.1
+  version: v0.1.0
   author: Meroxa, Inc.
   source:
     parameters:
@@ -64,7 +64,7 @@ specification:
       - name: fileChunkSizeBytes
         description: Size of a file chunk in bytes to split large files, maximum is 4MB.
         type: int
-        default: "4194304"
+        default: "3932160"
         validations: []
       - name: longpollTimeout
         description: Timeout for Dropbox longpolling requests.
