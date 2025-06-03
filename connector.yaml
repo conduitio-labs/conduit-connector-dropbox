@@ -38,23 +38,22 @@ specification:
 
 
     ### Creating a token
-    
-      A token can be created by creating a new Dropbox app. To do so, follow the steps
-    outlined below:
-    
-      1. Go to https://www.dropbox.com/developers/apps/create.
-      2. In "Choose an API," choose "Scoped access."
-      3. In "Choose the type of access you need," choose "App folder" or "Full
-      Dropbox," depending on whether the connector will access a single folder or
-      any folder in a Dropbox account.
-      4. In "Name your app," enter the name of your app (e.g. "ConduitConnectorProd").
-      5. Click "Create app."
-      6. Once the app has been created, you'll be redirected to the app's settings.
-      7. Go to "Permissions."
+
+    A token can be created by creating a new Dropbox app. To do so, follow the steps outlined below:
+
+    1. Go to https://www.dropbox.com/developers/apps/create.
+    2. In "Choose an API," choose "Scoped access."
+    3. In "Choose the type of access you need," choose "App folder" or "Full
+    Dropbox," depending on whether the connector will access a single folder or
+    any folder in a Dropbox account.
+    4. In "Name your app," enter the name of your app (e.g. "ConduitConnectorProd").
+    5. Click "Create app."
+    6. Once the app has been created, you'll be redirected to the app's settings.
+    7. Go to "Permissions."
     8. Select the following permissions:
-      - `files.metadata.read`
-      - `files.content.write`
-      - `files.content.read`
+        - `files.metadata.read`
+        - `files.content.write`
+        - `files.content.read`
 
     ## Destination
 
